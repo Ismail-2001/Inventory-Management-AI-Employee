@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
+from starlette.responses import JSONResponse
+from starlette.requests import Request
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
 from api.routes.operations import router as ops_router
 from api.routes.purchase_orders import router as po_router
@@ -23,6 +25,14 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "type": exc.__class__.__name__},
+    )
 
 app.include_router(run_sync_router)
 app.include_router(po_router)
