@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from langgraph.graph import Command
+from langgraph.types import Command
 from sqlalchemy import select
 
 from agent.auth import verify_api_key, require_role
