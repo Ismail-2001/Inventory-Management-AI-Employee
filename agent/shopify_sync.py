@@ -123,6 +123,79 @@ async def sync_products_and_inventory() -> int:
     return synced
 
 
+async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
+    """Fetch and upsert exactly one variant via its inventory item id - used
+    by the inventory_levels webhook so a single stock change doesn't trigger
+    a full catalog resync. Shopify's inventory_levels/update payload gives us
+    an inventory_item_id, which is a distinct gid type from a variant id, so
+    this queries InventoryItem and reads the linked variant off it.
+    """
+    gid = f"gid://shopify/InventoryItem/{shopify_inventory_item_id}"
+    query = """
+    query InventoryItemQuery($id: ID!) {
+      inventoryItem(id: $id) {
+        id
+        variant {
+          id
+          sku
+          inventoryQuantity
+          product { title }
+        }
+        inventoryLevels(first: 5) {
+          edges { node { location { id } available } }
+        }
+      }
+    }
+    """
+    async with _shopify_client() as client:
+        resp = await client.post("", json={"query": query, "variables": {"id": gid}})
+        resp.raise_for_status()
+        data = resp.json()
+        if "errors" in data:
+            raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
+
+        item = data["data"].get("inventoryItem")
+        if not item or not item.get("variant"):
+            return False
+
+        variant = item["variant"]
+        variant_id = _parse_gid(variant["id"])
+        sku_code = variant.get("sku") or variant_id
+        stock = variant.get("inventoryQuantity") or 0
+        title = variant.get("product", {}).get("title", "")
+
+        location_id = None
+        levels = item.get("inventoryLevels", {}).get("edges", [])
+        for le in levels:
+            loc = le["node"].get("location", {})
+            location_id = _parse_gid(loc["id"]) if loc.get("id") else None
+            stock = le["node"].get("available", stock)
+            break
+
+        async with async_session_factory() as session:
+            stmt = pg_insert(Sku).values(
+                shopify_variant_id=variant_id,
+                sku_code=sku_code,
+                title=title,
+                current_stock=stock,
+                location_id=location_id,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["shopify_variant_id"],
+                set_={
+                    "sku_code": stmt.excluded.sku_code,
+                    "title": stmt.excluded.title,
+                    "current_stock": stmt.excluded.current_stock,
+                    "location_id": stmt.excluded.location_id,
+                    "updated_at": func.now(),
+                },
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+    return True
+
+
 ORDERS_QUERY = """
 query OrdersQuery($cursor: String, $since: DateTime!) {
   orders(first: 50, after: $cursor, query: $since, sortKey: CREATED_AT) {

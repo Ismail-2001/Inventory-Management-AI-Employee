@@ -1,5 +1,5 @@
-import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Header
+from passlib.hash import bcrypt
 from sqlalchemy import select
 
 from agent.config import settings
@@ -8,15 +8,14 @@ from agent.models import Merchant, User
 
 
 def _hexdigest(key: str) -> str:
-    salt = _bcrypt.gensalt()
-    return _bcrypt.hashpw(key.encode(), salt).decode()
+    return bcrypt.hash(key)
 
 
 async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if x_api_key == settings.agent_api_key:
+    if settings.allow_demo_key and x_api_key == settings.agent_api_key:
         return Merchant(
             id=0,
             name="Demo Merchant",
@@ -30,7 +29,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
 
     for merchant in merchants:
         try:
-            if _bcrypt.checkpw(x_api_key.encode(), merchant.hashed_api_key.encode()):
+            if bcrypt.verify(x_api_key, merchant.hashed_api_key):
                 return merchant
         except Exception:
             continue

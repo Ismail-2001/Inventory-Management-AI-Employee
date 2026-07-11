@@ -41,7 +41,7 @@ app.include_router(ops_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,13 +80,17 @@ async def health():
     }
 
 
-@app.post("/api/v1/analyze", response_model=InventoryAnalysis)
+@app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
 async def analyze_inventory(
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
 ):
     """
-    Analyze a single inventory item and get recommendations.
+    DEPRECATED: this is the original single-shot demo endpoint, kept only
+    because tests/test_agent.py still exercises the underlying agent module.
+    New integrations should use POST /api/v1/run-sync, which runs the real
+    LangGraph pipeline (sync -> forecast -> risk -> po_draft -> notify)
+    against actual Shopify data instead of a manually-posted single item.
 
     Example:
     {
@@ -107,15 +111,12 @@ async def analyze_inventory(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/bulk", response_model=BulkAnalysisResponse)
+@app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
 async def analyze_bulk(
     request: BulkAnalysisRequest,
     x_api_key: str = Depends(verify_api_key)
 ):
-    """
-    Analyze multiple inventory items at once.
-    Returns individual results + summary statistics.
-    """
+    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.analyze_bulk(request.items)
         return result
@@ -123,14 +124,12 @@ async def analyze_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/forecast")
+@app.post("/api/v1/forecast", deprecated=True)
 async def forecast_demand(
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
 ):
-    """
-    Get demand forecast for next 90 days.
-    """
+    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.forecast_demand(item)
         return result
@@ -140,6 +139,8 @@ async def forecast_demand(
 
 @app.on_event("startup")
 async def startup():
+    settings.validate_required()
+
     from agent.scheduler import start
     start()
 

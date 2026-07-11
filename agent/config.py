@@ -48,6 +48,15 @@ class Settings:
         default_factory=lambda: os.getenv("AGENT_API_KEY", "demo-key-2024")
     )
 
+    environment: str = field(
+        default_factory=lambda: os.getenv("ENVIRONMENT", "development")
+    )
+    allow_demo_key: bool = field(
+        default_factory=lambda: os.getenv(
+            "ALLOW_DEMO_KEY", "true" if os.getenv("ENVIRONMENT", "development") != "production" else "false"
+        ).lower() == "true"
+    )
+
     model_name: str = field(
         default_factory=lambda: os.getenv("MODEL_NAME", "gemini-2.0-flash")
     )
@@ -64,6 +73,12 @@ class Settings:
 
     shopify_webhook_secret: str = field(
         default_factory=lambda: os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+    )
+
+    allowed_origins: list = field(
+        default_factory=lambda: [
+            o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()
+        ]
     )
 
     def validate_required(self):

@@ -22,6 +22,7 @@ class Sku(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     shopify_variant_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    merchant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
     sku_code: Mapped[Optional[str]] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(512))
     current_stock: Mapped[int] = mapped_column(Integer, default=0)
@@ -97,6 +98,7 @@ class PurchaseOrder(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     sku_id: Mapped[int] = mapped_column(Integer, ForeignKey("skus.id", ondelete="CASCADE"), nullable=False, index=True)
+    merchant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
     supplier_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"))
     status: Mapped[POStatus] = mapped_column(SAEnum(POStatus), nullable=False, default=POStatus.draft)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
