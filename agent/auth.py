@@ -1,5 +1,5 @@
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Header
-from passlib.hash import bcrypt
 from sqlalchemy import select
 
 from agent.config import settings
@@ -8,7 +8,8 @@ from agent.models import Merchant, User
 
 
 def _hexdigest(key: str) -> str:
-    return bcrypt.hash(key)
+    salt = _bcrypt.gensalt()
+    return _bcrypt.hashpw(key.encode(), salt).decode()
 
 
 async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
@@ -29,7 +30,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
 
     for merchant in merchants:
         try:
-            if bcrypt.verify(x_api_key, merchant.hashed_api_key):
+            if _bcrypt.checkpw(x_api_key.encode(), merchant.hashed_api_key.encode()):
                 return merchant
         except Exception:
             continue

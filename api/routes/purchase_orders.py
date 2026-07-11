@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from langgraph.graph import Command
+from langgraph.types import Command
 from sqlalchemy import select
 
 from agent.auth import verify_api_key
@@ -56,6 +56,44 @@ async def _resume_graph(thread_id: str, resume_value: str):
         Command(resume=resume_value),
         {"configurable": {"thread_id": thread_id}},
     )
+
+
+@router.get("/api/v1/po")
+async def list_pos(merchant=Depends(verify_api_key)):
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PurchaseOrder).order_by(PurchaseOrder.created_at.desc())
+        )
+        return [po.to_dict() if hasattr(po, 'to_dict') else {
+            "id": po.id, "sku_id": po.sku_id, "supplier_id": po.supplier_id,
+            "status": po.status.value, "quantity": po.quantity,
+            "unit_cost": float(po.unit_cost), "total_cost": float(po.total_cost),
+            "reasoning_text": po.reasoning_text, "approved_by": po.approved_by,
+            "approved_at": po.approved_at.isoformat() if po.approved_at else None,
+            "rejected_reason": po.rejected_reason,
+            "created_at": po.created_at.isoformat(),
+            "edited_before_approval": po.edited_before_approval,
+            "original_quantity": po.original_quantity,
+        } for po in result.scalars().all()]
+
+
+@router.get("/api/v1/po/{po_id}")
+async def get_po(po_id: int, merchant=Depends(verify_api_key)):
+    async with async_session_factory() as session:
+        po = await session.get(PurchaseOrder, po_id)
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        return {
+            "id": po.id, "sku_id": po.sku_id, "supplier_id": po.supplier_id,
+            "status": po.status.value, "quantity": po.quantity,
+            "unit_cost": float(po.unit_cost), "total_cost": float(po.total_cost),
+            "reasoning_text": po.reasoning_text, "approved_by": po.approved_by,
+            "approved_at": po.approved_at.isoformat() if po.approved_at else None,
+            "rejected_reason": po.rejected_reason,
+            "created_at": po.created_at.isoformat(),
+            "edited_before_approval": po.edited_before_approval,
+            "original_quantity": po.original_quantity,
+        }
 
 
 @router.post("/api/v1/po/{po_id}/approve")

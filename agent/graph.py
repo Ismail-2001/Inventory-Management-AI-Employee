@@ -37,6 +37,6 @@ def build_graph() -> StateGraph:
 
 
 async def get_compiled_graph():
-    checkpointer = await create_checkpointer()
+    checkpointer = create_checkpointer()
     graph = build_graph()
     return graph.compile(checkpointer=checkpointer, interrupt_after=["po_draft"])

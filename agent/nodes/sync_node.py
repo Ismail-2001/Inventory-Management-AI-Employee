@@ -6,8 +6,14 @@ from agent.shopify_sync import sync_products_and_inventory, sync_sales_history
 from agent.telemetry import trace_node
 
 
+from agent.config import settings
+
+
 @trace_node("sync")
 async def sync_node(state: dict) -> dict:
+    if not settings.shopify_store_domain:
+        return {"skus": [], "synced_products": 0, "synced_sales": 0}
+
     synced_products = await sync_products_and_inventory()
     synced_sales = await sync_sales_history(days=90)
 

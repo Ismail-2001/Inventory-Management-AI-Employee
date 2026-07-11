@@ -5,6 +5,9 @@ services:
       - "8002:8002"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://inventory:inventory@postgres:5432/inventory_agent
+      CHECKPOINTER_DATABASE_URL: postgresql://inventory:inventory@postgres:5432/inventory_agent
     depends_on:
       postgres:
         condition: service_healthy
