@@ -40,7 +40,7 @@ query ProductsQuery($cursor: String) {
                   edges {
                     node {
                       location { id }
-                      available
+                      quantities(names: "available") { quantity }
                     }
                   }
                 }
@@ -92,7 +92,16 @@ async def sync_products_and_inventory() -> int:
                         for le in levels:
                             loc = le["node"].get("location", {})
                             location_id = _parse_gid(loc["id"]) if loc.get("id") else None
-                            stock = le["node"].get("available", stock)
+                            quantities = le["node"].get("quantities", [])
+                            if isinstance(quantities, list):
+                                for qe in quantities:
+                                    stock = qe.get("quantity", stock)
+                                    break
+                            elif isinstance(quantities, dict):
+                                edges = quantities.get("edges", [])
+                                for qe in edges:
+                                    stock = qe.get("node", {}).get("quantity", stock)
+                                    break
                             break
 
                     async with async_session_factory() as session:
@@ -142,7 +151,7 @@ async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
           product { title }
         }
         inventoryLevels(first: 5) {
-          edges { node { location { id } available } }
+          edges { node { location { id } quantities(names: "available") { name quantity } } }
         }
       }
     }
@@ -169,7 +178,16 @@ async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
         for le in levels:
             loc = le["node"].get("location", {})
             location_id = _parse_gid(loc["id"]) if loc.get("id") else None
-            stock = le["node"].get("available", stock)
+            quantities = le["node"].get("quantities", [])
+            if isinstance(quantities, list):
+                for qe in quantities:
+                    stock = qe.get("quantity", stock)
+                    break
+            elif isinstance(quantities, dict):
+                edges = quantities.get("edges", [])
+                for qe in edges:
+                    stock = qe.get("node", {}).get("quantity", stock)
+                    break
             break
 
         async with async_session_factory() as session:
@@ -197,7 +215,7 @@ async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
 
 
 ORDERS_QUERY = """
-query OrdersQuery($cursor: String, $since: DateTime!) {
+query OrdersQuery($cursor: String, $since: String!) {
   orders(first: 50, after: $cursor, query: $since, sortKey: CREATED_AT) {
     pageInfo { hasNextPage endCursor }
     edges {

@@ -140,4 +140,4 @@ async def po_draft_node(state: dict) -> dict:
                 "status": po.status.value,
             })
 
-    return {"purchase_orders": created_pos}
+    return {**state, "purchase_orders": created_pos}

@@ -15,7 +15,7 @@ async def notify_node(state: dict) -> dict:
     pos = state.get("purchase_orders", [])
 
     if not alerts and not pos:
-        return {}
+        return {**state}
 
     critical = [a for a in alerts if a["risk_level"] == "critical"]
     warning = [a for a in alerts if a["risk_level"] == "warning"]
@@ -51,4 +51,4 @@ async def notify_node(state: dict) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
             await client.post(settings.slack_webhook_url, json={"text": summary})
 
-    return {"notification_summary": summary}
+    return {**state, "notification_summary": summary}

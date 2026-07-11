@@ -35,4 +35,4 @@ async def risk_node(state: dict) -> dict:
                     "alert_id": alert.id,
                 })
 
-    return {"risk_alerts": alerts}
+    return {**state, "risk_alerts": alerts}

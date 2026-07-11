@@ -74,4 +74,4 @@ async def forecast_node(state: dict) -> dict:
             "predicted_daily_demand": fr.predicted_daily_demand,
             "days_of_stock_remaining": fr.days_of_stock_remaining,
         })
-    return {"forecasts": results}
+    return {**state, "forecasts": results}
