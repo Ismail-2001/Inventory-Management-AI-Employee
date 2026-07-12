@@ -91,7 +91,7 @@ async def po_draft_node(state: dict) -> dict:
             if supplier:
                 supplier_id = supplier.id
                 moq = supplier.moq_by_sku.get(sku["sku_code"], supplier.default_lead_time_days) if isinstance(supplier.moq_by_sku, dict) else 1
-                unit_cost = 0.0
+                unit_cost = supplier.unit_cost_by_sku.get(sku["sku_code"], 0.0) if isinstance(supplier.unit_cost_by_sku, dict) else 0.0
 
         quantity = calculate_reorder_quantity(
             predicted_daily_demand=predicted,

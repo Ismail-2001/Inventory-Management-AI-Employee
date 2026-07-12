@@ -90,6 +90,7 @@ class Supplier(Base):
     contact_email: Mapped[Optional[str]] = mapped_column(String(256))
     default_lead_time_days: Mapped[int] = mapped_column(Integer, default=7)
     moq_by_sku: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
+    unit_cost_by_sku: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
