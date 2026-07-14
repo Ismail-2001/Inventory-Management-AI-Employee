@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { api, type MetricsResponse } from '../lib/api'
+import { showToast } from '../lib/toast'
+
+function pluralize(n: number, singular: string, plural: string) {
+  return n === 1 ? singular : plural
+}
+
+function fmtPct(v: number) {
+  return v % 1 === 0 ? `${v}%` : `${v.toFixed(1)}%`
+}
+
+function MinBar(props: any) {
+  const { x, y, width, height, fill } = props
+  return <rect x={x} y={y} width={Math.max(width, 4)} height={height} fill={fill} rx={6} />
+}
 
 export default function Analytics() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null)
@@ -16,9 +30,9 @@ export default function Analytics() {
     setWeekloading(true)
     try {
       const res = await api.triggerWeekly()
-      alert(`Weekly report generated: ${res.insights_count} insights`)
+      showToast(`Weekly report generated: ${res.insights_count} ${pluralize(res.insights_count, 'insight', 'insights')}`)
     } catch (e: any) {
-      alert(e.message)
+      showToast(e.message)
     } finally {
       setWeekloading(false)
     }
@@ -28,10 +42,10 @@ export default function Analytics() {
     setEvalLoading(true)
     try {
       const res = await api.triggerOutcomeEval()
-      alert(`Evaluated ${res.evaluated} pending outcomes`)
+      showToast(`Evaluated ${res.evaluated} pending ${pluralize(res.evaluated, 'outcome', 'outcomes')}`)
       api.getMetrics(30).then(setMetrics).catch(() => {})
     } catch (e: any) {
-      alert(e.message)
+      showToast(e.message)
     } finally {
       setEvalLoading(false)
     }
@@ -87,9 +101,9 @@ export default function Analytics() {
                   <Tooltip
                     cursor={{ fill: '#eef0ec' }}
                     contentStyle={{ borderRadius: 8, border: '1px solid #e1e0d7', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}
-                    formatter={(v: any) => [`${v}%`, '']}
+                    formatter={(v: any) => [fmtPct(v), '']}
                   />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} animationDuration={800} animationEasing="ease-out">
+                  <Bar dataKey="value" shape={<MinBar />} radius={[0, 6, 6, 0]} animationDuration={800} animationEasing="ease-out">
                     {acceptanceData.map((d, i) => <Cell key={i} fill={d.tone} />)}
                   </Bar>
                 </BarChart>
@@ -112,14 +126,14 @@ export default function Analytics() {
                     <Tooltip
                       cursor={{ fill: '#eef0ec' }}
                       contentStyle={{ borderRadius: 8, border: '1px solid #e1e0d7', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}
-                      formatter={(v: any) => [`${v}%`, '']}
+                      formatter={(v: any) => [fmtPct(v), '']}
                     />
                     <Bar dataKey="value" fill="#2b3a67" radius={[6, 6, 0, 0]} animationDuration={800} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
               <p className="text-center font-mono text-[12px] text-ink-muted">
-                Based on {fore.count} evaluated outcome{fore.count !== 1 ? 's' : ''} · Stockout rate: {fore.stockout_rate}%
+                Based on {fore.count} evaluated {pluralize(fore.count, 'outcome', 'outcomes')} · Stockout rate: {fore.stockout_rate}%
               </p>
             </>
           ) : (

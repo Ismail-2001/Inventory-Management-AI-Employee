@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, X } from 'lucide-react'
 import { api, type PurchaseOrder } from '../lib/api'
 import { cn, formatDate, statusColor } from '../lib/utils'
+import { showToast } from '../lib/toast'
 
 const container = {
   hidden: { opacity: 0 },
@@ -13,6 +14,8 @@ export default function PurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [approving, setApproving] = useState<number | null>(null)
   const [justResolved, setJustResolved] = useState<{ id: number; kind: 'approved' | 'rejected' } | null>(null)
+  const [rejectingId, setRejectingId] = useState<number | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   const fetchOrders = async () => {
     try {
@@ -36,25 +39,27 @@ export default function PurchaseOrders() {
       await api.approvePO(po.id, qty)
       setJustResolved({ id: po.id, kind: 'approved' })
       setTimeout(() => setJustResolved(null), 900)
+      showToast('PO approved')
       await fetchOrders()
     } catch (err: any) {
-      alert(err.message)
+      showToast(err.message)
     } finally {
       setApproving(null)
     }
   }
 
   const handleReject = async (po: PurchaseOrder) => {
-    const reason = prompt('Reason for rejection (optional):')
-    if (reason === null) return
     setApproving(po.id)
     try {
-      await api.rejectPO(po.id, reason || undefined)
+      await api.rejectPO(po.id, rejectReason || undefined)
       setJustResolved({ id: po.id, kind: 'rejected' })
       setTimeout(() => setJustResolved(null), 900)
+      setRejectingId(null)
+      setRejectReason('')
+      showToast('PO rejected')
       await fetchOrders()
     } catch (err: any) {
-      alert(err.message)
+      showToast(err.message)
     } finally {
       setApproving(null)
     }
@@ -155,15 +160,49 @@ export default function PurchaseOrders() {
                         {approving === po.id ? '…' : 'Approve'}
                       </motion.button>
                     </form>
-                    <motion.button
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => handleReject(po)}
-                      disabled={approving === po.id}
-                      className="inline-flex h-8 items-center justify-center rounded-md border border-critical/30 bg-surface px-3 text-[13px] font-medium text-critical transition-colors hover:bg-critical-bg disabled:pointer-events-none disabled:opacity-40"
-                    >
-                      Reject
-                    </motion.button>
+
+                    {rejectingId === po.id ? (
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); handleReject(po) }}
+                        className="flex items-center gap-1.5"
+                      >
+                        <input
+                          autoFocus
+                          value={rejectReason}
+                          onChange={e => setRejectReason(e.target.value)}
+                          placeholder="Reason (optional)"
+                          className="h-8 w-40 rounded-md border border-border-strong bg-surface px-2 text-[13px]"
+                        />
+                        <motion.button
+                          whileHover={{ scale: 1.04 }}
+                          whileTap={{ scale: 0.96 }}
+                          type="submit"
+                          disabled={approving === po.id}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-critical/30 bg-surface px-3 text-[13px] font-medium text-critical transition-colors hover:bg-critical-bg disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          {approving === po.id ? '…' : 'Confirm'}
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.04 }}
+                          whileTap={{ scale: 0.96 }}
+                          type="button"
+                          onClick={() => { setRejectingId(null); setRejectReason('') }}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
+                        >
+                          Cancel
+                        </motion.button>
+                      </form>
+                    ) : (
+                      <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => setRejectingId(po.id)}
+                        disabled={approving === po.id}
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-critical/30 bg-surface px-3 text-[13px] font-medium text-critical transition-colors hover:bg-critical-bg disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        Reject
+                      </motion.button>
+                    )}
                   </div>
                 </motion.div>
               ))}

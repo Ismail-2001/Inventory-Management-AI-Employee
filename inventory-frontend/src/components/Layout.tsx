@@ -1,7 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { LayoutGrid, ClipboardCheck, Boxes, BarChart3, Settings as SettingsIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { onToast } from '../lib/toast'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutGrid },
@@ -13,6 +15,15 @@ const navItems = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
+  const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([])
+
+  useEffect(() => {
+    return onToast(msg => {
+      const id = Date.now()
+      setToasts(prev => [...prev, { id, msg }])
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
+    })
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -28,7 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </motion.div>
           <div>
             <p className="text-sm font-medium leading-none">Inventory</p>
-            <p className="mt-1 text-[11px] leading-none text-ink-faint">AI Employee #2</p>
+            <p className="mt-1 text-[11px] leading-none text-ink-faint">Inventory Employee</p>
           </div>
         </div>
         <nav className="relative flex-1 space-y-0.5 px-3">
@@ -57,13 +68,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
-        <div className="border-t border-border px-4 py-4 font-mono text-[11px] text-ink-faint">
-          v1.0.0
+        <div className="border-t border-border px-4 py-4">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-healthy/30 bg-healthy-bg px-2 py-0.5 font-mono text-[11px] font-medium text-healthy">
+            <span className="h-1.5 w-1.5 rounded-full bg-healthy" />
+            Connected
+          </span>
         </div>
       </aside>
       <main className="flex-1 overflow-auto bg-paper p-6">
         {children}
       </main>
+
+      {/* Toast container */}
+      <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
+        {toasts.map(t => (
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="rounded-lg border border-border bg-surface px-4 py-3 text-[13px] font-medium text-ink shadow-lg"
+          >
+            {t.msg}
+          </motion.div>
+        ))}
+      </div>
     </div>
   )
 }

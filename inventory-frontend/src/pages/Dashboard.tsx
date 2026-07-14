@@ -3,6 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw, TrendingUp } from 'lucide-react'
 import { api, type MetricsResponse, type RunSyncResponse } from '../lib/api'
 import { AnimatedNumber } from '../components/AnimatedNumber'
+import { showToast } from '../lib/toast'
+
+function pluralize(n: number, singular: string, plural: string) {
+  return n === 1 ? singular : plural
+}
+
+function fmtPct(v: number) {
+  return v % 1 === 0 ? `${v}%` : `${v.toFixed(1)}%`
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -27,9 +36,10 @@ export default function Dashboard() {
     try {
       const res = await api.runSync()
       setSyncResult(res)
+      showToast(`Synced ${res.synced_products} products, ${res.synced_sales} sales`)
       api.getMetrics(7).then(setMetrics).catch(() => {})
     } catch (e: any) {
-      alert(e.message)
+      showToast(e.message)
     } finally {
       setSyncing(false)
     }
@@ -68,8 +78,8 @@ export default function Dashboard() {
             className="overflow-hidden rounded-lg border border-accent/20 bg-accent-bg p-4 font-mono text-[12.5px] text-accent"
           >
             Synced {syncResult.synced_products} products, {syncResult.synced_sales} sales.&nbsp;
-            {syncResult.risk_alerts > 0 && `${syncResult.risk_alerts} risk alerts, `}
-            {syncResult.purchase_orders > 0 && `${syncResult.purchase_orders} POs drafted.`}
+            {syncResult.risk_alerts > 0 && `${syncResult.risk_alerts} ${pluralize(syncResult.risk_alerts, 'risk alert', 'risk alerts')}, `}
+            {syncResult.purchase_orders > 0 && `${syncResult.purchase_orders} ${pluralize(syncResult.purchase_orders, 'PO drafted', 'POs drafted')}.`}
           </motion.div>
         )}
       </AnimatePresence>
@@ -102,9 +112,9 @@ export default function Dashboard() {
           <h3 className="mb-3 text-[13px] font-medium text-ink-muted">Forecast Accuracy</h3>
           {fore ? (
             <div className="space-y-1.5 font-mono text-[12.5px] text-ink-muted">
-              <p>Mean error: <span className="tabular font-medium text-ink">{fore.mean_error_pct}%</span></p>
-              <p>Range: <span className="tabular text-ink">{fore.min_error_pct}% – {fore.max_error_pct}%</span></p>
-              <p>Stockout rate: <span className="tabular text-ink">{fore.stockout_rate}%</span></p>
+              <p>Mean error: <span className="tabular font-medium text-ink">{fmtPct(fore.mean_error_pct)}</span></p>
+              <p>Range: <span className="tabular text-ink">{fmtPct(fore.min_error_pct)} – {fmtPct(fore.max_error_pct)}</span></p>
+              <p>Stockout rate: <span className="tabular text-ink">{fmtPct(fore.stockout_rate)}</span></p>
             </div>
           ) : (
             <p className="text-[13px] text-ink-faint">Not enough outcome data yet</p>
