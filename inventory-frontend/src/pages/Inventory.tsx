@@ -1,25 +1,12 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { api } from '../lib/api'
-
-interface SkuItem {
-  id: number
-  shopify_variant_id: string
-  sku_code: string | null
-  title: string
-  current_stock: number
-  location_id: string | null
-}
+import { api, type SkuSummary } from '../lib/api'
 
 export default function Inventory() {
-  const [items, setItems] = useState<SkuItem[]>([])
+  const [items, setItems] = useState<SkuSummary[]>([])
 
   useEffect(() => {
-    // NOTE: this only triggers a sync, it does not populate items - there is
-    // no GET /api/v1/skus endpoint yet to list synced inventory.
-    api.runSync().then(() => {
-      setItems([])
-    }).catch(() => {})
+    api.getSkus().then(setItems).catch(() => {})
   }, [])
 
   return (
@@ -44,7 +31,7 @@ export default function Inventory() {
               {items.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-ink-faint">
-                    A GET /api/v1/skus endpoint is needed to list synced inventory here — not built yet.
+                    No SKUs found — run a sync first.
                   </td>
                 </tr>
               ) : (

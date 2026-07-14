@@ -82,6 +82,7 @@ export const api = {
   getMetrics: (days = 30) => request<MetricsResponse>(`/metrics?days=${days}`),
   triggerOutcomeEval: () => request<{ status: string; evaluated: number }>('/evaluate-outcomes', { method: 'POST' }),
   triggerWeekly: () => request<{ status: string; insights_count: number }>('/run-weekly', { method: 'POST' }),
+  getSkus: () => request<SkuSummary[]>('/skus'),
   approvePO: (poId: number, quantity?: number) =>
     request<{ status: string; po_id: number }>(`/po/${poId}/approve`, {
       method: 'POST',

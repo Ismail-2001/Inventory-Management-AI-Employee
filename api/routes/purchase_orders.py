@@ -58,6 +58,44 @@ async def _resume_graph(thread_id: str, resume_value: str):
     )
 
 
+@router.get("/api/v1/po")
+async def list_purchase_orders(
+    status: str | None = None,
+    merchant=Depends(verify_api_key),
+):
+    async with async_session_factory() as session:
+        query = select(PurchaseOrder)
+        if status:
+            try:
+                status_enum = POStatus(status)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+            query = query.where(PurchaseOrder.status == status_enum)
+        query = query.order_by(PurchaseOrder.id.desc())
+        result = await session.execute(query)
+        pos = result.scalars().all()
+
+    return [
+        {
+            "id": po.id,
+            "sku_id": po.sku_id,
+            "supplier_id": po.supplier_id,
+            "status": po.status.value,
+            "quantity": po.quantity,
+            "unit_cost": float(po.unit_cost),
+            "total_cost": float(po.total_cost),
+            "reasoning_text": po.reasoning_text,
+            "approved_by": po.approved_by,
+            "approved_at": po.approved_at.isoformat() if po.approved_at else None,
+            "rejected_reason": po.rejected_reason,
+            "created_at": po.created_at.isoformat() if po.created_at else None,
+            "edited_before_approval": po.edited_before_approval,
+            "original_quantity": po.original_quantity,
+        }
+        for po in pos
+    ]
+
+
 @router.post("/api/v1/po/{po_id}/approve")
 async def approve_po(
     po_id: int,
