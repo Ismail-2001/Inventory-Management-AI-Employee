@@ -3,15 +3,19 @@ import hashlib
 import hmac
 import json
 from datetime import datetime
+from inspect import isawaitable
+from typing import Awaitable, Callable
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from agent.config import settings
-from agent.db import async_session_factory
-from agent.models import Sku, SalesHistory
+from agent.db import async_session_factory, session_scope
+from agent.models import Sku, SalesHistory, WebhookEvent
 from agent.shopify_sync import sync_products_and_inventory, sync_single_variant
+
+_processed_webhook_events: set[str] = set()
 
 
 async def verify_shopify_webhook(request: Request):
@@ -32,6 +36,39 @@ async def verify_shopify_webhook(request: Request):
         raise HTTPException(status_code=401, detail="Invalid HMAC signature")
 
     return body
+
+
+async def _webhook_already_processed(event_id: str | None) -> bool:
+    if not event_id:
+        return False
+    if event_id in _processed_webhook_events:
+        return True
+    async with session_scope(async_session_factory) as session:
+        result = await session.execute(select(WebhookEvent).where(WebhookEvent.event_id == event_id))
+        return result.scalar_one_or_none() is not None
+
+
+async def _mark_webhook_processed(event_id: str | None, event_type: str | None):
+    if not event_id:
+        return
+    _processed_webhook_events.add(event_id)
+    async with session_scope(async_session_factory) as session:
+        session.add(WebhookEvent(event_id=event_id, event_type=event_type))
+        await session.commit()
+
+
+async def handle_webhook_event(request: Request, event_type: str, handler: Callable[[dict], Awaitable[None]]):
+    event_id = request.headers.get("X-Shopify-Webhook-Id")
+    if await _webhook_already_processed(event_id):
+        return {"status": "ignored", "reason": "duplicate_webhook", "event_id": event_id}
+
+    verified_body = verify_shopify_webhook(request)
+    body = await verified_body if isawaitable(verified_body) else verified_body
+    payload = json.loads(body)
+    await handler(payload)
+
+    await _mark_webhook_processed(event_id, event_type)
+    return {"status": "ok", "event_id": event_id}
 
 
 async def handle_inventory_update(payload: dict):
@@ -58,7 +95,7 @@ async def handle_order_create(payload: dict):
     if not sku_codes:
         return
 
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         result = await session.execute(select(Sku).where(Sku.sku_code.in_(sku_codes)))
         sku_by_code = {s.sku_code: s for s in result.scalars().all()}
 
@@ -87,7 +124,7 @@ async def handle_product_update(payload: dict):
     if not variants:
         return
 
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         for v in variants:
             variant_id = str(v.get("id", ""))
             if not variant_id:

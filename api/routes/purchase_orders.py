@@ -1,20 +1,22 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from langgraph.types import Command
 from sqlalchemy import select
 
 from agent.auth import verify_api_key, require_role
-from agent.db import async_session_factory
+from api.rate_limit import limiter
+from agent.db import async_session_factory, session_scope
 from agent.graph import get_compiled_graph
-from agent.models import POStatus, PurchaseOrder
+from agent.models import IdempotencyKey, POStatus, PurchaseOrder
 from agent.signing import sign_token, verify_token
 
 router = APIRouter()
+_idempotency_cache: dict[str, dict] = {}
 
 
 async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         result = await session.execute(
             select(PurchaseOrder).where(PurchaseOrder.id == po_id)
         )
@@ -41,7 +43,7 @@ async def _mark_edited_if_changed(po_id: int, approved_quantity: int | None):
 
 
 async def _update_po_status(po_id: int, status: POStatus, **extra):
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         po = await session.get(PurchaseOrder, po_id)
         if po:
             po.status = status
@@ -58,12 +60,35 @@ async def _resume_graph(thread_id: str, resume_value: str):
     )
 
 
+async def _run_with_idempotency(key: str | None, endpoint: str, action):
+    if key and key in _idempotency_cache:
+        return _idempotency_cache[key]
+
+    if key:
+        async with session_scope(async_session_factory) as session:
+            result = await session.execute(select(IdempotencyKey).where(IdempotencyKey.key == key))
+            existing = result.scalar_one_or_none()
+            if existing:
+                _idempotency_cache[key] = existing.response_json
+                return existing.response_json
+
+    response_payload = await action()
+
+    if key:
+        _idempotency_cache[key] = response_payload
+        async with session_scope(async_session_factory) as session:
+            session.add(IdempotencyKey(key=key, endpoint=endpoint, response_json=response_payload))
+            await session.commit()
+
+    return response_payload
+
+
 @router.get("/api/v1/po")
 async def list_purchase_orders(
     status: str | None = None,
     merchant=Depends(verify_api_key),
 ):
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         query = select(PurchaseOrder)
         if status:
             try:
@@ -96,14 +121,7 @@ async def list_purchase_orders(
     ]
 
 
-@router.post("/api/v1/po/{po_id}/approve")
-async def approve_po(
-    po_id: int,
-    approved_by: str = "merchant",
-    quantity: int | None = None,
-    merchant=Depends(verify_api_key),
-    _user=Depends(require_role("owner", "staff")),
-):
+async def _approve_po_impl(po_id: int, approved_by: str, quantity: int | None):
     po, thread_id = await _resolve_po(po_id)
     await _mark_edited_if_changed(po_id, quantity)
     await _resume_graph(thread_id, "approve")
@@ -116,17 +134,46 @@ async def approve_po(
     return {"status": "approved", "po_id": po_id}
 
 
-@router.post("/api/v1/po/{po_id}/reject")
-async def reject_po(
-    po_id: int,
-    reason: str = "",
-    merchant=Depends(verify_api_key),
-    _user=Depends(require_role("owner", "staff")),
-):
+async def _reject_po_impl(po_id: int, reason: str):
     po, thread_id = await _resolve_po(po_id)
     await _resume_graph(thread_id, "reject")
     await _update_po_status(po_id, POStatus.rejected, rejected_reason=reason or None)
     return {"status": "rejected", "po_id": po_id}
+
+
+@router.post("/api/v1/po/{po_id}/approve")
+@limiter.limit("10/minute")
+async def approve_po(
+    request: Request,
+    po_id: int,
+    approved_by: str = "merchant",
+    quantity: int | None = None,
+    merchant=Depends(verify_api_key),
+    _user=Depends(require_role("owner", "staff")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    return await _run_with_idempotency(
+        idempotency_key,
+        f"/api/v1/po/{po_id}/approve",
+        lambda: _approve_po_impl(po_id, approved_by, quantity),
+    )
+
+
+@router.post("/api/v1/po/{po_id}/reject")
+@limiter.limit("10/minute")
+async def reject_po(
+    request: Request,
+    po_id: int,
+    reason: str = "",
+    merchant=Depends(verify_api_key),
+    _user=Depends(require_role("owner", "staff")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    return await _run_with_idempotency(
+        idempotency_key,
+        f"/api/v1/po/{po_id}/reject",
+        lambda: _reject_po_impl(po_id, reason),
+    )
 
 
 @router.get("/api/v1/po/action")

@@ -3,7 +3,7 @@ from passlib.hash import bcrypt
 from sqlalchemy import select
 
 from agent.config import settings
-from agent.db import async_session_factory
+from agent.db import async_session_factory, session_scope
 from agent.models import Merchant, User
 
 
@@ -23,7 +23,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
             shopify_store_domain=settings.shopify_store_domain,
         )
 
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         result = await session.execute(select(Merchant))
         merchants = result.scalars().all()
 
@@ -40,7 +40,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
 async def get_current_user(merchant: Merchant = Depends(verify_api_key)) -> User | None:
     if merchant.id == 0:
         return User(id=0, merchant_id=0, email="demo@example.com", role="owner")
-    async with async_session_factory() as session:
+    async with session_scope(async_session_factory) as session:
         result = await session.execute(
             select(User).where(User.merchant_id == merchant.id).limit(1)
         )

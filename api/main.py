@@ -3,20 +3,21 @@ Inventory Agent - API Server
 Run: uvicorn api.main:app --reload --port 8002
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse
-from starlette.requests import Request
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
+from api.rate_limit import limiter
 from api.routes.operations import router as ops_router
 from api.routes.purchase_orders import router as po_router
 from api.routes.run_sync import router as run_sync_router
 from api.routes.webhooks import router as webhooks_router
 from agent.auth import verify_api_key
 from agent.config import settings
-
 
 app = FastAPI(
     title="Inventory Agent",
@@ -25,6 +26,13 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def _get_api_key_key(request: Request) -> str:
+    api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or "anonymous"
+    return f"api-key:{api_key}"
 
 
 @app.exception_handler(Exception)
@@ -71,7 +79,8 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+@limiter.limit("60/minute")
+async def health(request: Request):
     return {
         "status": "healthy",
         "agent": "inventory",
@@ -81,6 +90,7 @@ async def health():
 
 
 @app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
+@limiter.limit("60/minute")
 async def analyze_inventory(
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
@@ -112,6 +122,7 @@ async def analyze_inventory(
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
+@limiter.limit("60/minute")
 async def analyze_bulk(
     request: BulkAnalysisRequest,
     x_api_key: str = Depends(verify_api_key)
@@ -125,6 +136,7 @@ async def analyze_bulk(
 
 
 @app.post("/api/v1/forecast", deprecated=True)
+@limiter.limit("60/minute")
 async def forecast_demand(
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)

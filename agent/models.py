@@ -141,6 +141,34 @@ class ReflectionInsight(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class LlmUsage(Base):
+    __tablename__ = "llm_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    node_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tokens_in: Mapped[Optional[int]] = mapped_column(Integer)
+    tokens_out: Mapped[Optional[int]] = mapped_column(Integer)
+    estimated_cost: Mapped[Optional[float]] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    endpoint: Mapped[Optional[str]] = mapped_column(String(256))
+    response_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+
+    event_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    event_type: Mapped[Optional[str]] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class User(Base):
     __tablename__ = "users"
 

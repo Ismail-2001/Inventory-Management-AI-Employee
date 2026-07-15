@@ -1,5 +1,7 @@
 import asyncio
+import inspect
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -17,6 +19,16 @@ from agent.config import settings
 
 engine = create_async_engine(settings.database_url, echo=False, pool_size=5, max_overflow=10)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@asynccontextmanager
+async def session_scope(factory=None):
+    factory = factory or async_session_factory
+    session = factory()
+    if inspect.isawaitable(session):
+        session = await session
+    async with session as session_obj:
+        yield session_obj
 
 
 class Base(DeclarativeBase):

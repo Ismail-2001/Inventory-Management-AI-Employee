@@ -60,6 +60,9 @@ class Settings:
     model_name: str = field(
         default_factory=lambda: os.getenv("MODEL_NAME", "gemini-2.0-flash")
     )
+    daily_llm_spend_cap: float = field(
+        default_factory=lambda: float(os.getenv("DAILY_LLM_SPEND_CAP", "5"))
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("TEMPERATURE", "0.3"))
     )
