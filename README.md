@@ -2,7 +2,7 @@
 
 > **Your autonomous inventory operations agent.** Syncs, forecasts, detects risks, drafts purchase orders, and reports — 24/7, with human oversight where it matters.
 
-![LangGraph](https://img.shields.io/badge/Powered%20By-LangGraph-purple) ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-green) ![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)
+![CI](https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml/badge.svg) ![LangGraph](https://img.shields.io/badge/Powered%20By-LangGraph-purple) ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-green) ![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)
 
 ---
 
