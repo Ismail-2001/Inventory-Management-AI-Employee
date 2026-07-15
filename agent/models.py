@@ -41,6 +41,7 @@ class Merchant(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     hashed_api_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    key_prefix: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

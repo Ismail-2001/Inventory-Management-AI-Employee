@@ -23,8 +23,9 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
             shopify_store_domain=settings.shopify_store_domain,
         )
 
+    prefix = x_api_key[:8]
     async with session_scope(async_session_factory) as session:
-        result = await session.execute(select(Merchant))
+        result = await session.execute(select(Merchant).where(Merchant.key_prefix == prefix))
         merchants = result.scalars().all()
 
     for merchant in merchants:
