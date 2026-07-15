@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/api/v1/run-sync")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def run_sync(request: Request, merchant=Depends(verify_api_key)):
     thread_id = str(uuid.uuid4())
     graph = await get_compiled_graph()

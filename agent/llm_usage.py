@@ -47,5 +47,5 @@ async def should_skip_llm_call(node_name: str, prompt: str | None = None) -> boo
     if settings.daily_llm_spend_cap <= 0:
         return False
 
-    current_spend = await get_daily_spend_total(node_name)
+    current_spend = await get_daily_spend_total()
     return current_spend >= settings.daily_llm_spend_cap

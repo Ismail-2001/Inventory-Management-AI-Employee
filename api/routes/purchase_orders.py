@@ -142,7 +142,7 @@ async def _reject_po_impl(po_id: int, reason: str):
 
 
 @router.post("/api/v1/po/{po_id}/approve")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def approve_po(
     request: Request,
     po_id: int,
@@ -160,7 +160,7 @@ async def approve_po(
 
 
 @router.post("/api/v1/po/{po_id}/reject")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def reject_po(
     request: Request,
     po_id: int,
