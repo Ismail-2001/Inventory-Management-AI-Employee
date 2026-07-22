@@ -243,7 +243,8 @@ def _parse_shopify_date(d: str) -> date:
 
 
 async def sync_sales_history(days: int = 90) -> int:
-    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
+    since_ts = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
+    since = f"created_at:>={since_ts}"
     synced = 0
     async with _shopify_client() as client:
         cursor: str | None = None
@@ -301,8 +302,9 @@ async def sync_sales_history(days: int = 90) -> int:
                             date=order_date,
                             units_sold=quantity,
                         )
-                        stmt = stmt.on_conflict_do_nothing(
-                            constraint="uq_sales_history_sku_date"
+                        stmt = stmt.on_conflict_do_update(
+                            constraint="uq_sales_history_sku_date",
+                            set_={"units_sold": SalesHistory.units_sold + quantity},
                         )
                         await session.execute(stmt)
                         await session.commit()
