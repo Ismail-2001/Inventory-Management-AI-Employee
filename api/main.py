@@ -24,6 +24,9 @@ from agent.auth import verify_api_key
 from agent.config import settings
 
 
+_dev_notifications: list[dict] = []
+
+
 def _get_provider() -> str:
     if os.getenv("GOOGLE_API_KEY"):
         return "gemini"
@@ -43,6 +46,20 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.post("/api/v1/dev-webhook")
+async def dev_webhook(request: Request):
+    body = await request.json()
+    _dev_notifications.append({"text": body.get("text", "")})
+    if len(_dev_notifications) > 50:
+        _dev_notifications.pop(0)
+    return {"ok": True}
+
+
+@app.get("/api/v1/dev-webhook")
+async def dev_webhook_log():
+    return _dev_notifications
 
 
 @app.get("/health")
