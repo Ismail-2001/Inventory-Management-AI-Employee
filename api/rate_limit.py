@@ -7,4 +7,4 @@ def _get_api_key_key(request: Request) -> str:
     return f"api-key:{api_key}"
 
 
-limiter = Limiter(key_func=_get_api_key_key)
+limiter = Limiter(key_func=_get_api_key_key, default_limits=["60/minute"])

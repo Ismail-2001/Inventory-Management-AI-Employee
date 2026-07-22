@@ -46,7 +46,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/health")
-@limiter.limit("60/minute")
 async def health(request: Request):
     return {
         "status": "healthy",
@@ -100,7 +99,6 @@ async def root():
 
 
 @app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
-@limiter.limit("60/minute")
 async def analyze_inventory(
     request: Request,
     item: InventoryItem,
@@ -133,7 +131,6 @@ async def analyze_inventory(
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
-@limiter.limit("60/minute")
 async def analyze_bulk(
     request: Request,
     request_body: BulkAnalysisRequest,
@@ -148,7 +145,6 @@ async def analyze_bulk(
 
 
 @app.post("/api/v1/forecast", deprecated=True)
-@limiter.limit("60/minute")
 async def forecast_demand(
     request: Request,
     item: InventoryItem,
