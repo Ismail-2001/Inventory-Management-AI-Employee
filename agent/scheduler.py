@@ -1,8 +1,6 @@
-from datetime import date, datetime
+import os
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-from agent.config import settings
 
 scheduler = AsyncIOScheduler()
 
@@ -28,6 +26,8 @@ async def weekly_reflection():
 
 
 def start():
+    if os.getenv("ENABLE_SCHEDULER", "").lower() not in ("1", "true", "yes"):
+        return
     scheduler.add_job(daily_outcome_eval, "interval", hours=24, id="daily_outcome_eval")
     scheduler.add_job(
         weekly_reflection, "cron", day_of_week="mon", hour=8, minute=0, id="weekly_reflection"

@@ -1,0 +1,25 @@
+services:
+  inventory-agent:
+    ports: []
+    expose:
+      - "8002"
+    environment:
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-false}
+
+  caddy:
+    image: caddy:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./inventory-frontend/dist:/usr/share/caddy/html:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - inventory-agent
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
