@@ -84,6 +84,10 @@ class Settings:
         default_factory=lambda: os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
     )
 
+    domain: str = field(
+        default_factory=lambda: os.getenv("DOMAIN", "")
+    )
+
     allowed_origins: list = field(
         default_factory=lambda: [
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()

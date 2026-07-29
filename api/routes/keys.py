@@ -1,0 +1,55 @@
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from agent.auth import verify_api_key, require_role
+from api.rate_limit import limiter
+from agent.security import create_merchant_api_key, rotate_api_key, revoke_api_key, list_merchant_keys
+
+router = APIRouter()
+
+
+@router.post("/api/v1/keys")
+@limiter.limit("3/minute")
+async def create_key(
+    request: Request,
+    name: str = "default",
+    shopify_store_domain: str = "",
+    merchant=Depends(verify_api_key),
+    _=Depends(require_role("owner")),
+):
+    raw = await create_merchant_api_key(name, shopify_store_domain)
+    return {"api_key": raw, "warning": "Save this key — it will not be shown again."}
+
+
+@router.get("/api/v1/keys")
+async def list_keys(
+    request: Request,
+    merchant=Depends(verify_api_key),
+    _=Depends(require_role("owner")),
+):
+    keys = await list_merchant_keys(merchant.id)
+    return {"keys": keys}
+
+
+@router.post("/api/v1/keys/rotate")
+@limiter.limit("3/minute")
+async def rotate_key(
+    request: Request,
+    merchant=Depends(verify_api_key),
+    _=Depends(require_role("owner")),
+):
+    raw = await rotate_api_key(merchant.id)
+    return {"api_key": raw, "warning": "Save this key — it will not be shown again."}
+
+
+@router.delete("/api/v1/keys/{prefix}")
+@limiter.limit("3/minute")
+async def delete_key(
+    request: Request,
+    prefix: str,
+    merchant=Depends(verify_api_key),
+    _=Depends(require_role("owner")),
+):
+    ok = await revoke_api_key(prefix)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Key not found")
+    return {"status": "revoked"}
