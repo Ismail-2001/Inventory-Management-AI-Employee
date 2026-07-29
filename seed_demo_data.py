@@ -155,6 +155,7 @@ async def seed_demo_data():
                 title=s["title"],
                 current_stock=s["current_stock"],
                 location_id=s["location_id"],
+                merchant_id=0,
             )
             session.add(sku)
             await session.flush()

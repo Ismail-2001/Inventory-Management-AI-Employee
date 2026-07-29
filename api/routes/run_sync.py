@@ -19,7 +19,7 @@ async def run_sync(request: Request, merchant=Depends(verify_api_key)):
     """
     thread_id = str(uuid.uuid4())
     graph = request.app.state.graph
-    result = await graph.ainvoke({}, {"configurable": {"thread_id": thread_id}})
+    result = await graph.ainvoke({"merchant_id": merchant.id}, {"configurable": {"thread_id": thread_id}})
 
     pending_pos = result.get("purchase_orders", [])
 

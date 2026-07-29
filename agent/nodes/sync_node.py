@@ -19,7 +19,11 @@ async def sync_node(state: dict) -> dict:
         synced_sales = await sync_sales_history(days=90)
 
     async with async_session_factory() as session:
-        result = await session.execute(select(Sku))
+        q = select(Sku)
+        mid = state.get("merchant_id")
+        if mid and mid != 0:
+            q = q.where(Sku.merchant_id == mid)
+        result = await session.execute(q)
         skus = result.scalars().all()
         sku_list = [
             {

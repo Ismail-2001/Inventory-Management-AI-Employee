@@ -89,6 +89,8 @@ async def list_purchase_orders(
 ):
     async with session_scope(async_session_factory) as session:
         query = select(PurchaseOrder)
+        if merchant.id and merchant.id != 0:
+            query = query.where(PurchaseOrder.merchant_id == merchant.id)
         if status:
             try:
                 status_enum = POStatus(status)
