@@ -4,8 +4,6 @@ from fastapi import APIRouter, Depends, Request
 
 from agent.auth import verify_api_key
 from api.rate_limit import limiter
-from agent.db import async_session_factory
-from agent.models import PurchaseOrder
 
 router = APIRouter()
 
@@ -13,18 +11,17 @@ router = APIRouter()
 @router.post("/api/v1/run-sync")
 @limiter.limit("5/minute")
 async def run_sync(request: Request, merchant=Depends(verify_api_key)):
+    """Trigger the full inventory agent pipeline.
+
+    The graph runs synchronously: sync → forecast → risk → po_draft → notify_pending.
+    Purchase orders are created with a thread_id attached immediately (no post-hoc DB update).
+    Returns the thread_id so the caller can resume the graph after human approval.
+    """
     thread_id = str(uuid.uuid4())
     graph = request.app.state.graph
     result = await graph.ainvoke({}, {"configurable": {"thread_id": thread_id}})
 
     pending_pos = result.get("purchase_orders", [])
-    if pending_pos:
-        async with async_session_factory() as session:
-            for po_info in pending_pos:
-                po = await session.get(PurchaseOrder, po_info["po_id"])
-                if po:
-                    po.thread_id = thread_id
-            await session.commit()
 
     return {
         "status": "ok",

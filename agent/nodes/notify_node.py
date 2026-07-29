@@ -69,8 +69,12 @@ async def notify_pending_node(state: dict) -> dict:
         return {**state, "notification_summary": ""}
 
     if settings.slack_webhook_url:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(settings.slack_webhook_url, json={"text": summary})
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(settings.slack_webhook_url, json={"text": summary})
+        except Exception as e:
+            import logging
+            logging.warning("Slack notification failed: %s", e)
 
     return {**state, "notification_summary": summary}
 

@@ -180,6 +180,7 @@ async def po_action_via_token(
     token: str = Query(...),
     reason: str = Query(default=""),
     quantity: int | None = Query(default=None),
+    request: Request = Depends(),
 ):
     payload = verify_token(token)
     if not payload:

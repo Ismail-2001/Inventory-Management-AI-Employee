@@ -118,7 +118,7 @@ async def handle_order_create(payload: dict):
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["sku_id", "date"],
-                set_={"units_sold": stmt.excluded.units_sold},
+                set_={"units_sold": SalesHistory.units_sold + stmt.excluded.units_sold},
             )
             await session.execute(stmt)
 

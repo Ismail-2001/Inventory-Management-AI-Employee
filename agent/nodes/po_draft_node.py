@@ -134,6 +134,7 @@ async def po_draft_node(state: dict) -> dict:
                 quantity=quantity,
                 unit_cost=unit_cost,
                 total_cost=round(unit_cost * quantity, 2),
+                thread_id=state.get("thread_id"),
                 reasoning_text=reasoning,
             )
             session.add(po)

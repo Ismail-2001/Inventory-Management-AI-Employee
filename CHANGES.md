@@ -48,7 +48,32 @@ All three webhook handlers previously called `sync_products_and_inventory()` —
 - `validate_required()` confirmed to actually raise on missing config
 - `allow_demo_key` confirmed to resolve `False` under `ENVIRONMENT=production`
 
-## Still open (not silently claimed as done)
-- Full multi-tenant Shopify sync loop (per-merchant credentials, scheduled per merchant)
-- Row-Level Security on the new `merchant_id` columns (schema is ready for it — Phase 4 Step 5 in the roadmap doc)
-- `test_agent.py` / legacy `inventory_agent.py` retirement
+## 9. Signed-URL approval endpoint fixed (crashed on every call)
+**Files:** `api/routes/purchase_orders.py:178`
+`po_action_via_token` was missing the `request: Request` parameter, causing `NameError` on every Slack link click. Fixed by adding `request: Request = Depends()`.
+
+## 10. Webhook sales history no longer overwrites same-day records
+**File:** `agent/webhooks.py:119-121`
+Changed `set_={"units_sold": stmt.excluded.units_sold}` (overwrite) to `set_={"units_sold": SalesHistory.units_sold + stmt.excluded.units_sold}` (accumulate). Without this fix, two orders for the same SKU on the same day would silently erase each other.
+
+## 11. `thread_id` now attached to POs during graph execution
+**File:** `agent/nodes/po_draft_node.py` (PurchaseOrder constructor)
+Added `thread_id=state.get("thread_id")` to the PO creation. Previously, `thread_id` was set in a post-hoc DB update in `run_sync` — a race condition where approvals arriving between graph completion and DB update would fail with "No active approval thread."
+
+## 12. Slack notification failure no longer crashes the pipeline
+**File:** `agent/nodes/notify_node.py` (notify_pending_node)
+Wrapped the Slack HTTP POST in a try/except. A Slack outage or network error now logs a warning and continues — it does not abort the entire graph run.
+
+## 13. Demo infrastructure added
+**Files:** `setup_demo.sh`, `seed_demo_data.py`, `demo_script.md` (new)
+- `setup_demo.sh` — one-command demo environment setup (Docker + migrations + data seed)
+- `seed_demo_data.py` — populates 10 realistic US DTC SKUs with 90-day sales history
+- `demo_script.md` — 15-minute client presentation script with live commands
+
+## 14. `run_sync.py` cleaned up
+**File:** `api/routes/run_sync.py`
+Removed post-hoc DB update for `thread_id` — POs now carry `thread_id` from graph execution (see #11). Removed now-unused imports (`PurchaseOrder`, `async_session_factory`). Added docstring.
+
+## 15. README directory tree updated
+**File:** `README.md` (project tree section)
+Added `setup_demo.sh`, `seed_demo_data.py`, and `demo_script.md` to the full project tree listing so new contributors and reviewers can discover the demo infrastructure files.

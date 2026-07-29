@@ -58,6 +58,116 @@ async def test_graph_sends_pending_notification_before_resume():
 
 
 # ---------------------------------------------------------------------------
+# Full-graph integration test (state-merging across every node)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_full_graph_returns_all_expected_state_keys():
+    """Exercise get_compiled_graph() → ainvoke() with all external deps mocked.
+
+    Verifies that every node in the pipeline contributes its intended key to
+    the final state dict — catching any node that returns only ``{new_key: …}``
+    instead of ``{**state, new_key: …}``.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from agent.graph import get_compiled_graph
+    from agent.nodes.forecast_node import ForecastResult
+    from langgraph.checkpoint.memory import MemorySaver
+
+    # ── domain stubs ──────────────────────────────────────────────
+
+    class FakeSku:
+        id = 1
+        shopify_variant_id = "gid://shopify/Variant/1"
+        sku_code = "SKU001"
+        title = "Test Widget"
+        current_stock = 0
+        location_id = "1"
+
+    class FakeSupplier:
+        id = 1
+        name = "Test Supplier"
+        default_moq = 5
+        moq_by_sku = {"SKU001": 5}
+        unit_cost_by_sku = {"SKU001": 15.0}
+        default_lead_time_days = 7
+
+    # ── per-module DB session mocks ───────────────────────────────
+
+    # sync_node   → select(Sku)
+    sync_session = AsyncMock()
+    sync_session.execute.return_value.scalars.return_value.all.return_value = [
+        FakeSku()
+    ]
+    sync_session.__aenter__.return_value = sync_session
+
+    # risk_node   → RiskAlert (add / commit)
+    risk_session = AsyncMock()
+    risk_session.__aenter__.return_value = risk_session
+    risk_session.add = MagicMock()
+    risk_session.commit = AsyncMock()
+
+    # po_draft_node → select(Supplier) + PurchaseOrder (add / commit / refresh)
+    po_session = AsyncMock()
+    po_session.__aenter__.return_value = po_session
+    po_session.execute.return_value.scalar_one_or_none.return_value = FakeSupplier()
+
+    async def _po_refresh(obj):
+        obj.id = 1
+
+    po_session.refresh = _po_refresh
+
+    # ── run the compiled graph with every external dependency mocked ──
+
+    with (
+        # Graph construction — avoid real Postgres checkpointer
+        patch("agent.graph.create_checkpointer", return_value=MemorySaver()),
+        # sync_node — local-ref patches (autouse fixture patches the source,
+        # not the import-site, so those are ineffective for sync_node)
+        patch("agent.nodes.sync_node.async_session_factory", return_value=sync_session),
+        patch("agent.nodes.sync_node.settings.shopify_store_domain", "test-store.myshopify.com"),
+        patch("agent.nodes.sync_node.sync_products_and_inventory", return_value=0),
+        patch("agent.nodes.sync_node.sync_sales_history", return_value=0),
+        # forecast_node — skip real forecast logic + DB, return a result that
+        # triggers a critical risk alert (5.0 ≤ 7 lead_time)
+        patch(
+            "agent.nodes.forecast_node.calculate_forecast",
+            return_value=ForecastResult(
+                sku_id=1, predicted_daily_demand=1.0, days_of_stock_remaining=5.0
+            ),
+        ),
+        # risk_node — DB for RiskAlert creation
+        patch("agent.nodes.risk_node.async_session_factory", return_value=risk_session),
+        # po_draft_node — DB + LLM
+        patch("agent.nodes.po_draft_node.async_session_factory", return_value=po_session),
+        patch(
+            "agent.nodes.po_draft_node._generate_reasoning",
+            return_value="Fake LLM reasoning for test",
+        ),
+        # notify_node — Slack webhook URL (httpx already mocked via autouse)
+        patch(
+            "agent.nodes.notify_node.settings.slack_webhook_url",
+            "https://hooks.slack.com/test",
+        ),
+    ):
+        compiled = await get_compiled_graph()
+        result = await compiled.ainvoke(
+            {}, {"configurable": {"thread_id": "test-graph-keys"}}
+        )
+
+    # ── verify state contribution from every node ────────────────
+    assert "skus" in result and result["skus"], "skus missing or empty"
+    assert "synced_products" in result, "synced_products missing"
+    assert isinstance(result["synced_products"], int)
+    assert "forecasts" in result and result["forecasts"], "forecasts missing or empty"
+    assert "risk_alerts" in result and result["risk_alerts"], "risk_alerts missing or empty"
+    assert "purchase_orders" in result and result["purchase_orders"], "purchase_orders missing or empty"
+    assert "notification_summary" in result and result["notification_summary"], "notification_summary missing or empty"
+
+
+# ---------------------------------------------------------------------------
 # notify_node unit tests
 # ---------------------------------------------------------------------------
 
