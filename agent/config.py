@@ -92,14 +92,15 @@ class Settings:
 
     def validate_required(self):
         missing = []
-        if not self.shopify_store_domain:
-            missing.append("SHOPIFY_STORE_DOMAIN")
-        if not self.shopify_admin_api_token:
-            missing.append("SHOPIFY_ADMIN_API_TOKEN")
+        if self.environment == "production":
+            if not self.shopify_store_domain:
+                missing.append("SHOPIFY_STORE_DOMAIN")
+            if not self.shopify_admin_api_token:
+                missing.append("SHOPIFY_ADMIN_API_TOKEN")
+            if not self.public_api_url:
+                missing.append("PUBLIC_API_URL")
         if not self.database_url:
             missing.append("DATABASE_URL")
-        if self.environment == "production" and not self.public_api_url:
-            missing.append("PUBLIC_API_URL")
         if missing:
             raise ValueError(
                 f"Missing required settings: {', '.join(missing)}. "
