@@ -1,5 +1,11 @@
-FROM python:3.12-slim
+FROM node:20-alpine AS frontend
+WORKDIR /build
+COPY inventory-frontend/package*.json ./
+RUN npm ci
+COPY inventory-frontend/ ./
+RUN npm run build
 
+FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
@@ -11,6 +17,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+COPY --from=frontend --chown=appuser:appuser /build/dist inventory-frontend/dist
+
 RUN chown -R appuser:appuser /app
 
 USER appuser

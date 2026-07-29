@@ -1,12 +1,3 @@
 {$DOMAIN::80} {
-    root * /usr/share/caddy/html
-    try_files {path} /index.html
-
-    reverse_proxy /api/* inventory-agent:8002
-    reverse_proxy /health inventory-agent:8002
-    reverse_proxy /docs inventory-agent:8002
-    reverse_proxy /redoc inventory-agent:8002
-    reverse_proxy /openapi.json inventory-agent:8002
-
-    file_server
+    reverse_proxy * inventory-agent:8002
 }

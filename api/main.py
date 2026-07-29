@@ -17,6 +17,9 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse
 
+from shared.log_config import configure_logging
+configure_logging()
+
 from api.rate_limit import limiter
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
 from api.routes.operations import router as ops_router
