@@ -19,12 +19,7 @@ import httpx
 class Config:
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
-    MODEL_NAME = os.getenv(
-        "MODEL_NAME",
-        "llama-3.1-8b-instant" if os.getenv("LLM_PROVIDER", "openai").lower() == "groq" else "gemini-2.0-flash",
-    )
+    MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.3"))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
 
@@ -347,9 +342,6 @@ Provide:
     
     async def _call_llm(self, prompt: str) -> str:
         """Call LLM API."""
-        provider = self.config.LLM_PROVIDER.lower()
-        if provider == "groq" and self.config.GROQ_API_KEY:
-            return await self._call_groq(prompt)
         if self.config.GOOGLE_API_KEY:
             return await self._call_gemini(prompt)
         elif self.config.OPENAI_API_KEY:
@@ -381,25 +373,6 @@ Provide:
                 headers={"Authorization": f"Bearer {self.config.OPENAI_API_KEY}"},
                 json={
                     "model": "gpt-4",
-                    "messages": [
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": self.config.TEMPERATURE,
-                    "max_tokens": self.config.MAX_TOKENS
-                },
-                timeout=30.0
-            )
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
-
-    async def _call_groq(self, prompt: str) -> str:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self.config.GROQ_API_KEY}"},
-                json={
-                    "model": self.config.MODEL_NAME,
                     "messages": [
                         {"role": "system", "content": self.system_prompt},
                         {"role": "user", "content": prompt}

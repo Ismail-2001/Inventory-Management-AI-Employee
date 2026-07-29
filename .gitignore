@@ -10,12 +10,3 @@ build/
 .DS_Store
 Thumbs.db
 *.log
-*.whl
-node_modules/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-*.tsbuildinfo
-.next/
-coverage/
-.htmlcov/

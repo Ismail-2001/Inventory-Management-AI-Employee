@@ -3,38 +3,12 @@ Inventory Agent - API Server
 Run: uvicorn api.main:app --reload --port 8002
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
 import os
 
-from agent.db import close_checkpointer, create_checkpointer
-from agent.graph import build_graph
-
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse
-
-from api.rate_limit import limiter
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
-from api.routes.operations import router as ops_router
-from api.routes.purchase_orders import router as po_router
-from api.routes.run_sync import router as run_sync_router
-from api.routes.webhooks import router as webhooks_router
-from agent.auth import verify_api_key
-from agent.config import settings
-
-
-_dev_notifications: list[dict] = []
-
-
-def _get_provider() -> str:
-    if os.getenv("GOOGLE_API_KEY"):
-        return "gemini"
-    if os.getenv("GROQ_API_KEY"):
-        return "groq"
-    if os.getenv("OPENAI_API_KEY"):
-        return "openai"
-    return "mock"
 
 
 app = FastAPI(
@@ -44,53 +18,22 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-@app.post("/api/v1/dev-webhook")
-async def dev_webhook(request: Request):
-    body = await request.json()
-    _dev_notifications.append({"text": body.get("text", "")})
-    if len(_dev_notifications) > 50:
-        _dev_notifications.pop(0)
-    return {"ok": True}
-
-
-@app.get("/api/v1/dev-webhook")
-async def dev_webhook_log():
-    return _dev_notifications
-
-
-@app.get("/health")
-async def health(request: Request):
-    return {
-        "status": "healthy",
-        "agent": "inventory",
-        "version": "1.0.0",
-        "provider": _get_provider(),
-        "model": settings.model_name,
-    }
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "type": exc.__class__.__name__},
-    )
-
-app.include_router(run_sync_router)
-app.include_router(po_router)
-app.include_router(webhooks_router)
-app.include_router(ops_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+API_KEY = os.getenv("AGENT_API_KEY", "demo-key-2024")
+
+async def verify_api_key(x_api_key: str = Header(None)):
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return x_api_key
+
 
 @app.get("/")
 async def root():
@@ -115,18 +58,23 @@ async def root():
     }
 
 
-@app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "agent": "inventory",
+        "version": "1.0.0",
+        "provider": "gemini" if os.getenv("GOOGLE_API_KEY") else "mock"
+    }
+
+
+@app.post("/api/v1/analyze", response_model=InventoryAnalysis)
 async def analyze_inventory(
-    request: Request,
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
 ):
     """
-    DEPRECATED: this is the original single-shot demo endpoint, kept only
-    because tests/test_agent.py still exercises the underlying agent module.
-    New integrations should use POST /api/v1/run-sync, which runs the real
-    LangGraph pipeline (sync -> forecast -> risk -> po_draft -> notify)
-    against actual Shopify data instead of a manually-posted single item.
+    Analyze a single inventory item and get recommendations.
 
     Example:
     {
@@ -147,48 +95,35 @@ async def analyze_inventory(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
+@app.post("/api/v1/bulk", response_model=BulkAnalysisResponse)
 async def analyze_bulk(
-    request: Request,
-    request_body: BulkAnalysisRequest,
+    request: BulkAnalysisRequest,
     x_api_key: str = Depends(verify_api_key)
 ):
-    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
+    """
+    Analyze multiple inventory items at once.
+    Returns individual results + summary statistics.
+    """
     try:
-        result = await agent.analyze_bulk(request_body.items)
+        result = await agent.analyze_bulk(request.items)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/forecast", deprecated=True)
+@app.post("/api/v1/forecast")
 async def forecast_demand(
-    request: Request,
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
 ):
-    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
+    """
+    Get demand forecast for next 90 days.
+    """
     try:
         result = await agent.forecast_demand(item)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.on_event("startup")
-async def startup():
-    settings.validate_required()
-
-    app.state.checkpointer = create_checkpointer()
-    app.state.graph = build_graph().compile(checkpointer=app.state.checkpointer, interrupt_after=["notify_pending"])
-
-    from agent.scheduler import start
-    start()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await close_checkpointer(getattr(app.state, "checkpointer", None))
 
 
 if __name__ == "__main__":

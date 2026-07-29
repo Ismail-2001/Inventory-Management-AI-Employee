@@ -3,8 +3,6 @@ Tests for Inventory Agent
 Run: pytest tests/ -v
 """
 
-import importlib
-
 import pytest
 from agent.inventory_agent import InventoryAgent, InventoryItem, Config
 
@@ -122,20 +120,3 @@ def test_rule_based_fallback(agent, sample_item):
     result = agent._rule_based_fallback(sample_item)
     assert result.product_id == "SKU-001"
     assert result.days_of_stock_remaining > 0
-
-
-def test_groq_configuration_is_loaded(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "groq")
-    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-
-    import agent.config as config_module
-    import agent.inventory_agent as inventory_module
-
-    importlib.reload(config_module)
-    importlib.reload(inventory_module)
-
-    assert config_module.settings.llm_provider == "groq"
-    assert config_module.settings.groq_api_key == "test-groq-key"
-    assert inventory_module.Config().GROQ_API_KEY == "test-groq-key"
