@@ -27,9 +27,9 @@ else
 fi
 
 # Step 2: Start infrastructure
-echo "📋 Step 2/5 — Starting PostgreSQL..."
-docker compose up -d postgres 2>/dev/null || docker compose up -d
-echo "   ✅ Services starting (waiting for PostgreSQL)..."
+echo "📋 Step 2/5 — Starting all services..."
+docker compose up -d
+echo "   ✅ Services starting..."
 sleep 5
 
 # Step 3: Run migrations
@@ -46,6 +46,7 @@ echo "   ✅ Demo data ready"
 
 # Step 5: Start API
 echo "📋 Step 5/5 — Starting API server..."
+API_KEY=$(grep -oP 'AGENT_API_KEY=\K.*' .env 2>/dev/null || echo "demo-key-2024")
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║  🚀 Inventory Agent Demo is ready!                       ║"
@@ -54,9 +55,9 @@ echo "║  API:    http://localhost:8002                           ║"
 echo "║  Swagger: http://localhost:8002/docs                     ║"
 echo "║  Health: http://localhost:8002/health                    ║"
 echo "║                                                          ║"
-echo "║  Demo API Key: demo-key-2024                             ║"
+echo "║  API Key: ${API_KEY}                                    "
 echo "║                                                          ║"
 echo "║  Quick Start:                                            ║"
 echo "║  curl -X POST http://localhost:8002/api/v1/run-sync \\  ║"
-echo "║    -H 'X-API-Key: demo-key-2024'                         ║"
+echo "║    -H 'X-API-Key: ${API_KEY}'                           "
 echo "╚══════════════════════════════════════════════════════════╝"
