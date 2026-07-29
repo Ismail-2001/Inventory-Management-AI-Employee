@@ -11,11 +11,12 @@ from agent.config import settings
 
 @trace_node("sync")
 async def sync_node(state: dict) -> dict:
-    if not settings.shopify_store_domain:
-        return {"skus": [], "synced_products": 0, "synced_sales": 0}
+    synced_products = 0
+    synced_sales = 0
 
-    synced_products = await sync_products_and_inventory()
-    synced_sales = await sync_sales_history(days=90)
+    if settings.shopify_store_domain:
+        synced_products = await sync_products_and_inventory()
+        synced_sales = await sync_sales_history(days=90)
 
     async with async_session_factory() as session:
         result = await session.execute(select(Sku))
