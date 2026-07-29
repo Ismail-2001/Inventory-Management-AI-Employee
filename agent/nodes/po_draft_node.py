@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 
 from agent.config import settings
@@ -57,10 +59,10 @@ async def _generate_reasoning(data: dict) -> str:
         return _template_reasoning(data)
 
     try:
-        response = await llm_agent._call_llm(prompt)
-        if response and len(response) > 20:
-            await log_llm_call("po_draft", response)
-            return response.strip()
+        result = await llm_agent.llm.call(prompt)
+        if result and result.text and len(result.text) > 20:
+            await log_llm_call("po_draft", result.text)
+            return result.text.strip()
     except Exception:
         pass
 
@@ -73,34 +75,58 @@ async def po_draft_node(state: dict) -> dict:
     forecasts_map = {f["sku_id"]: f for f in state.get("forecasts", [])}
     skus_map = {s["id"]: s for s in state.get("skus", [])}
 
-    created_pos = []
+    if not alerts:
+        return {**state, "purchase_orders": []}
+
+    async with async_session_factory() as session:
+        supplier_row = (await session.execute(select(Supplier).limit(1))).scalar_one_or_none()
+
+    supplier_id = None
+    default_moq = 1
+    default_unit_cost = 0.0
+    moq_by_sku: dict = {}
+    unit_cost_by_sku: dict = {}
+    if supplier_row:
+        supplier_id = supplier_row.id
+        default_moq = supplier_row.default_moq or 1
+        default_unit_cost = 0.0
+        moq_by_sku = supplier_row.moq_by_sku if isinstance(supplier_row.moq_by_sku, dict) else {}
+        unit_cost_by_sku = supplier_row.unit_cost_by_sku if isinstance(supplier_row.unit_cost_by_sku, dict) else {}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    async with async_session_factory() as session:
+        sku_ids = [a["sku_id"] for a in alerts]
+        existing_pos = (
+            await session.execute(
+                select(PurchaseOrder.sku_id).where(
+                    PurchaseOrder.sku_id.in_(sku_ids),
+                    PurchaseOrder.status == POStatus.pending_approval,
+                    PurchaseOrder.created_at >= cutoff,
+                )
+            )
+        ).scalars().all()
+        existing_sku_ids = set(existing_pos)
+
+    pending_batch = []
     for alert in alerts:
-        sku = skus_map.get(alert["sku_id"])
+        sku_id = alert["sku_id"]
+        if sku_id in existing_sku_ids:
+            continue
+
+        sku = skus_map.get(sku_id)
         if not sku:
             continue
-        forecast = forecasts_map.get(alert["sku_id"])
+        forecast = forecasts_map.get(sku_id)
         if not forecast:
             continue
 
         predicted = forecast.get("predicted_daily_demand", 0)
         current_stock = sku.get("current_stock", 0)
         lead_time = sku.get("lead_time_days", 7)
+        sku_code = sku.get("sku_code", "")
 
-        async with async_session_factory() as session:
-            result = await session.execute(
-                select(Supplier).limit(1)
-            )
-            supplier = result.scalar_one_or_none()
-            moq = 1
-            supplier_id = None
-            unit_cost = 0.0
-            if supplier:
-                supplier_id = supplier.id
-                if isinstance(supplier.moq_by_sku, dict) and sku.get("sku_code") in supplier.moq_by_sku:
-                    moq = supplier.moq_by_sku[sku["sku_code"]]
-                else:
-                    moq = supplier.default_moq or 1
-                unit_cost = supplier.unit_cost_by_sku.get(sku["sku_code"], 0.0) if isinstance(supplier.unit_cost_by_sku, dict) else 0.0
+        moq = moq_by_sku.get(sku_code, default_moq) if sku_code else default_moq
+        unit_cost = unit_cost_by_sku.get(sku_code, default_unit_cost) if sku_code else default_unit_cost
 
         quantity = calculate_reorder_quantity(
             predicted_daily_demand=predicted,
@@ -114,7 +140,7 @@ async def po_draft_node(state: dict) -> dict:
 
         data = build_reasoning_input(
             sku_title=sku.get("title", ""),
-            sku_code=sku.get("sku_code", ""),
+            sku_code=sku_code,
             current_stock=current_stock,
             predicted_daily_demand=predicted,
             days_of_stock_remaining=forecast.get("days_of_stock_remaining"),
@@ -126,28 +152,48 @@ async def po_draft_node(state: dict) -> dict:
 
         reasoning = await _generate_reasoning(data)
 
-        async with async_session_factory() as session:
-            po = PurchaseOrder(
-                sku_id=alert["sku_id"],
-                supplier_id=supplier_id,
+        pending_batch.append({
+            "sku_id": sku_id,
+            "supplier_id": supplier_id,
+            "quantity": quantity,
+            "unit_cost": unit_cost,
+            "total_cost": round(unit_cost * quantity, 2),
+            "reasoning": reasoning,
+        })
+
+    if not pending_batch:
+        return {**state, "purchase_orders": []}
+
+    async with async_session_factory() as session:
+        thread_id = state.get("thread_id")
+        po_objects = [
+            PurchaseOrder(
+                sku_id=p["sku_id"],
+                supplier_id=p["supplier_id"],
                 status=POStatus.pending_approval,
-                quantity=quantity,
-                unit_cost=unit_cost,
-                total_cost=round(unit_cost * quantity, 2),
-                thread_id=state.get("thread_id"),
-                reasoning_text=reasoning,
+                quantity=p["quantity"],
+                unit_cost=p["unit_cost"],
+                total_cost=p["total_cost"],
+                thread_id=thread_id,
+                reasoning_text=p["reasoning"],
             )
-            session.add(po)
-            await session.commit()
+            for p in pending_batch
+        ]
+        session.add_all(po_objects)
+        await session.commit()
+        for po in po_objects:
             await session.refresh(po)
 
-            created_pos.append({
-                "po_id": po.id,
-                "sku_id": po.sku_id,
-                "quantity": po.quantity,
-                "total_cost": po.total_cost,
-                "reasoning": reasoning,
-                "status": po.status.value,
-            })
+    created_pos = [
+        {
+            "po_id": po.id,
+            "sku_id": po.sku_id,
+            "quantity": po.quantity,
+            "total_cost": po.total_cost,
+            "reasoning": po.reasoning_text,
+            "status": po.status.value,
+        }
+        for po in po_objects
+    ]
 
     return {**state, "purchase_orders": created_pos}

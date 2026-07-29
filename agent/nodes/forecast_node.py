@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 
 from sqlalchemy import select, func
@@ -6,6 +7,7 @@ from agent.db import async_session_factory
 from agent.forecast import exponential_smoothing
 from agent.models import Forecast, SalesHistory
 from agent.telemetry import trace_node
+from shared.cache import forecast_cache
 
 
 @dataclass
@@ -60,16 +62,31 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
 @trace_node("forecast")
 async def forecast_node(state: dict) -> dict:
     skus = state.get("skus", [])
-    results = []
-    for sku in skus:
-        fr = await calculate_forecast(
-            sku_id=sku["id"],
-            current_stock=sku["current_stock"],
-            lead_time_days=sku.get("lead_time_days", 7),
-        )
-        results.append({
-            "sku_id": fr.sku_id,
-            "predicted_daily_demand": fr.predicted_daily_demand,
-            "days_of_stock_remaining": fr.days_of_stock_remaining,
-        })
+
+    async def _forecast_one(sku: dict) -> dict | None:
+        cache_key = f"forecast:{sku['id']}"
+        cached = await forecast_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            fr = await asyncio.wait_for(
+                calculate_forecast(
+                    sku_id=sku["id"],
+                    current_stock=sku["current_stock"],
+                    lead_time_days=sku.get("lead_time_days", 7),
+                ),
+                timeout=10.0,
+            )
+            result = {
+                "sku_id": fr.sku_id,
+                "predicted_daily_demand": fr.predicted_daily_demand,
+                "days_of_stock_remaining": fr.days_of_stock_remaining,
+            }
+            await forecast_cache.set(cache_key, result)
+            return result
+        except asyncio.TimeoutError:
+            return None
+
+    results = [r for r in await asyncio.gather(*[_forecast_one(s) for s in skus]) if r is not None]
     return {**state, "forecasts": results}

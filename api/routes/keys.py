@@ -13,14 +13,20 @@ async def create_key(
     request: Request,
     name: str = "default",
     shopify_store_domain: str = "",
+    tier: str = "developer",
     merchant=Depends(verify_api_key),
     _=Depends(require_role("owner")),
 ):
-    raw = await create_merchant_api_key(name, shopify_store_domain)
-    return {"api_key": raw, "warning": "Save this key — it will not be shown again."}
+    raw = await create_merchant_api_key(name, shopify_store_domain, tier)
+    return {
+        "api_key": raw,
+        "tier": tier,
+        "warning": "Save this key — it will not be shown again.",
+    }
 
 
 @router.get("/api/v1/keys")
+@limiter.limit("10/minute")
 async def list_keys(
     request: Request,
     merchant=Depends(verify_api_key),

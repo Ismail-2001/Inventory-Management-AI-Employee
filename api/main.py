@@ -14,6 +14,7 @@ from agent.db import close_checkpointer, create_checkpointer
 from agent.graph import build_graph
 
 from slowapi import _rate_limit_exceeded_handler
+from shared.task_queue import task_queue
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse
 
@@ -57,6 +58,39 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from passlib.hash import bcrypt
+from agent.models import Merchant, MerchantTier
+
+_tier_cache: dict[str, MerchantTier] = {}
+
+class TierLookupMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
+        if api_key:
+            prefix = api_key[:8]
+            cached = _tier_cache.get(prefix)
+            if cached:
+                request.state.merchant_tier = cached
+            elif prefix:
+                try:
+                    from agent.db import async_session_factory
+                    from sqlalchemy import select
+                    async with async_session_factory() as session:
+                        result = await session.execute(
+                            select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
+                        )
+                        merchant = result.scalar_one_or_none()
+                        if merchant:
+                            tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                            _tier_cache[prefix] = tier
+                            request.state.merchant_tier = tier
+                except Exception:
+                    pass
+        return await call_next(request)
+
+app.add_middleware(TierLookupMiddleware)
+
 
 @app.post("/api/v1/dev-webhook")
 async def dev_webhook(request: Request):
@@ -78,6 +112,7 @@ async def health(request: Request):
         "status": "healthy",
         "agent": "inventory",
         "version": "1.0.0",
+        "region": settings.deployment_region,
         "provider": _get_provider(),
         "model": settings.model_name,
     }
@@ -95,6 +130,8 @@ app.include_router(webhooks_router)
 app.include_router(ops_router)
 from api.routes.keys import router as keys_router
 app.include_router(keys_router)
+from api.routes.usage import router as usage_router
+app.include_router(usage_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -183,8 +220,8 @@ async def analyze_inventory(
     try:
         result = await agent.analyze(item)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
@@ -198,8 +235,8 @@ async def analyze_bulk(
     try:
         result = await agent.analyze_bulk(request_body.items)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/v1/forecast", deprecated=True)
@@ -213,8 +250,8 @@ async def forecast_demand(
     try:
         result = await agent.forecast_demand(item)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.on_event("startup")
@@ -224,12 +261,14 @@ async def startup():
     app.state.checkpointer = create_checkpointer()
     app.state.graph = build_graph().compile(checkpointer=app.state.checkpointer, interrupt_after=["notify_pending"])
 
+    task_queue.start(app)
     from agent.scheduler import start
     start()
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    await task_queue.stop()
     await close_checkpointer(getattr(app.state, "checkpointer", None))
 
 

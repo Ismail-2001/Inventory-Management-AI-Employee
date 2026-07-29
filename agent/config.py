@@ -88,6 +88,31 @@ class Settings:
         default_factory=lambda: os.getenv("DOMAIN", "")
     )
 
+    sync_days: int = field(
+        default_factory=lambda: int(os.getenv("SYNC_DAYS", "30"))
+    )
+
+    database_read_url: str = field(
+        default_factory=lambda: os.getenv("DATABASE_READ_URL", "")
+    )
+
+    deployment_region: str = field(
+        default_factory=lambda: os.getenv("DEPLOYMENT_REGION", "local")
+    )
+
+    audit_s3_bucket: str = field(
+        default_factory=lambda: os.getenv("AUDIT_S3_BUCKET", "")
+    )
+    audit_s3_region: str = field(
+        default_factory=lambda: os.getenv("AUDIT_S3_REGION", "us-east-1")
+    )
+    audit_s3_access_key: str = field(
+        default_factory=lambda: os.getenv("AUDIT_S3_ACCESS_KEY", "")
+    )
+    audit_s3_secret_key: str = field(
+        default_factory=lambda: os.getenv("AUDIT_S3_SECRET_KEY", "")
+    )
+
     allowed_origins: list = field(
         default_factory=lambda: [
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()
@@ -103,6 +128,8 @@ class Settings:
                 missing.append("SHOPIFY_ADMIN_API_TOKEN")
             if not self.public_api_url:
                 missing.append("PUBLIC_API_URL")
+            if not os.getenv("CHECKPOINTER_DATABASE_URL") or self.checkpointer_database_url == self.database_url.replace("+asyncpg", ""):
+                missing.append("CHECKPOINTER_DATABASE_URL (must be separate from DATABASE_URL in production)")
         if not self.database_url:
             missing.append("DATABASE_URL")
         if missing:

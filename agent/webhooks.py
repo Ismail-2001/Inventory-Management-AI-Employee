@@ -3,17 +3,17 @@ import hashlib
 import hmac
 import json
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from inspect import isawaitable
 from typing import Awaitable, Callable
 
 from fastapi import HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from agent.config import settings
 from agent.db import async_session_factory, session_scope
-from agent.models import Sku, SalesHistory, WebhookEvent
+from agent.models import FailedWebhook, Sku, SalesHistory, WebhookEvent
 from agent.shopify_sync import sync_products_and_inventory, sync_single_variant
 
 _processed_webhook_events: OrderedDict[str, None] = OrderedDict()
@@ -64,6 +64,18 @@ async def _mark_webhook_processed(event_id: str | None, event_type: str | None):
         await session.commit()
 
 
+async def _enqueue_failed_webhook(event_id: str | None, event_type: str | None, payload_text: str, error: str):
+    async with session_scope(async_session_factory) as session:
+        session.add(FailedWebhook(
+            event_id=event_id,
+            event_type=event_type,
+            payload_text=payload_text[:10000],
+            error=str(error)[:1000],
+            next_retry_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        ))
+        await session.commit()
+
+
 async def handle_webhook_event(request: Request, event_type: str, handler: Callable[[dict], Awaitable[None]]):
     event_id = request.headers.get("X-Shopify-Webhook-Id")
     if await _webhook_already_processed(event_id):
@@ -72,10 +84,45 @@ async def handle_webhook_event(request: Request, event_type: str, handler: Calla
     verified_body = verify_shopify_webhook(request)
     body = await verified_body if isawaitable(verified_body) else verified_body
     payload = json.loads(body)
-    await handler(payload)
+    try:
+        await handler(payload)
+    except Exception as exc:
+        await _enqueue_failed_webhook(event_id, event_type, body.decode() if isinstance(body, bytes) else str(body), str(exc))
+        raise
 
     await _mark_webhook_processed(event_id, event_type)
     return {"status": "ok", "event_id": event_id}
+
+
+async def retry_failed_webhooks(max_retries: int = 3):
+    now = datetime.now(timezone.utc)
+    async with session_scope(async_session_factory) as session:
+        result = await session.execute(
+            select(FailedWebhook).where(
+                FailedWebhook.next_retry_at <= now,
+                FailedWebhook.retry_count < max_retries,
+            ).limit(50)
+        )
+        failed = result.scalars().all()
+
+    for fw in failed:
+        try:
+            payload = json.loads(fw.payload_text)
+            event_type = fw.event_type or ""
+            if event_type == "inventory_levels_update":
+                await handle_inventory_update(payload)
+            elif event_type == "orders_create":
+                await handle_order_create(payload)
+            elif event_type == "products_update":
+                await handle_product_update(payload)
+            async with session_scope(async_session_factory) as session:
+                await session.delete(fw)
+                await session.commit()
+        except Exception:
+            async with session_scope(async_session_factory) as session:
+                fw.retry_count += 1
+                fw.next_retry_at = now + timedelta(minutes=5 * (2 ** fw.retry_count))
+                await session.commit()
 
 
 async def handle_inventory_update(payload: dict):
@@ -151,6 +198,7 @@ async def handle_product_update(payload: dict):
                     "sku_code": stmt.excluded.sku_code,
                     "title": stmt.excluded.title,
                     "current_stock": stmt.excluded.current_stock,
+                    "updated_at": func.now(),
                 },
             )
             await session.execute(stmt)

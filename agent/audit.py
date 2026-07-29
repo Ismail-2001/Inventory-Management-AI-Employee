@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from functools import wraps
 
 from agent.db import async_session_factory
 from agent.models import AuditLog
@@ -27,13 +26,3 @@ async def log(
         )
         session.add(entry)
         await session.commit()
-
-
-def auditable(action: str):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            result = await func(*args, **kwargs)
-            return result
-        return wrapper
-    return decorator

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -53,9 +54,12 @@ async def _update_po_status(po_id: int, status: POStatus, **extra):
 
 async def _resume_graph(request: Request, thread_id: str, resume_value: str):
     graph = request.app.state.graph
-    await graph.ainvoke(
-        Command(resume=resume_value),
-        {"configurable": {"thread_id": thread_id}},
+    await asyncio.wait_for(
+        graph.ainvoke(
+            Command(resume=resume_value),
+            {"configurable": {"thread_id": thread_id}},
+        ),
+        timeout=120.0,
     )
 
 

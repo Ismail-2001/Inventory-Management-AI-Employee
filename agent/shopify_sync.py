@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta
+import asyncio
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict
 
 import httpx
@@ -59,6 +60,21 @@ def _parse_gid(gid: str) -> str:
     return gid.split("/")[-1]
 
 
+async def _shopify_call(client: httpx.AsyncClient, json: dict) -> dict:
+    for attempt in range(3):
+        resp = await client.post("", json=json)
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "5"))
+            await asyncio.sleep(retry_after * (2 ** attempt))
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        if "errors" in data:
+            raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
+        return data
+    raise RuntimeError("Shopify API rate limited after 3 retries")
+
+
 async def sync_products_and_inventory() -> int:
     synced = 0
     async with _shopify_client() as client:
@@ -66,14 +82,10 @@ async def sync_products_and_inventory() -> int:
         has_next = True
 
         while has_next:
-            resp = await client.post(
-                "",
-                json={"query": PRODUCTS_QUERY, "variables": {"cursor": cursor}},
+            data = await _shopify_call(
+                client,
+                {"query": PRODUCTS_QUERY, "variables": {"cursor": cursor}},
             )
-            resp.raise_for_status()
-            data = resp.json()
-            if "errors" in data:
-                raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
 
             products = data["data"]["products"]
             for edge in products["edges"]:
@@ -157,11 +169,10 @@ async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
     }
     """
     async with _shopify_client() as client:
-        resp = await client.post("", json={"query": query, "variables": {"id": gid}})
-        resp.raise_for_status()
-        data = resp.json()
-        if "errors" in data:
-            raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
+        data = await _shopify_call(
+            client,
+            {"query": query, "variables": {"id": gid}},
+        )
 
         item = data["data"].get("inventoryItem")
         if not item or not item.get("variant"):
@@ -243,7 +254,7 @@ def _parse_shopify_date(d: str) -> date:
 
 
 async def sync_sales_history(days: int = 90) -> int:
-    since_ts = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
+    since_ts = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
     since = f"created_at:>={since_ts}"
     synced = 0
     async with _shopify_client() as client:
@@ -251,17 +262,13 @@ async def sync_sales_history(days: int = 90) -> int:
         has_next = True
 
         while has_next:
-            resp = await client.post(
-                "",
-                json={
+            data = await _shopify_call(
+                client,
+                {
                     "query": ORDERS_QUERY,
                     "variables": {"cursor": cursor, "since": since},
                 },
             )
-            resp.raise_for_status()
-            data = resp.json()
-            if "errors" in data:
-                raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
 
             orders = data["data"]["orders"]
             for edge in orders["edges"]:

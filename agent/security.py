@@ -5,10 +5,9 @@ from fastapi import HTTPException
 from passlib.hash import bcrypt
 from sqlalchemy import select
 
-from agent.auth import require_role
 from agent.config import settings
 from agent.db import async_session_factory, session_scope
-from agent.models import Merchant
+from agent.models import Merchant, MerchantTier
 
 
 _KEY_PREFIX = "sk_live_"
@@ -22,14 +21,17 @@ def generate_api_key() -> tuple[str, str, str]:
     return raw, prefix, hashed
 
 
-async def create_merchant_api_key(name: str, shopify_store_domain: str) -> str:
+async def create_merchant_api_key(name: str, shopify_store_domain: str, tier: str = "developer") -> str:
     """Create a new merchant and return the raw API key (shown once)."""
+    if tier not in ("developer", "business", "enterprise"):
+        tier = "developer"
     raw, prefix, hashed = generate_api_key()
     merchant = Merchant(
         name=name,
         hashed_api_key=hashed,
         key_prefix=prefix,
         shopify_store_domain=shopify_store_domain,
+        tier=tier,
     )
     async with session_scope(async_session_factory) as session:
         session.add(merchant)

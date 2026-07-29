@@ -20,6 +20,12 @@ from agent.config import settings
 engine = create_async_engine(settings.database_url, echo=False, pool_size=5, max_overflow=10, pool_recycle=3600, pool_pre_ping=True)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+_read_engine = None
+async_session_factory_readonly = None
+if settings.database_read_url:
+    _read_engine = create_async_engine(settings.database_read_url, echo=False, pool_size=10, max_overflow=20, pool_recycle=3600, pool_pre_ping=True)
+    async_session_factory_readonly = async_sessionmaker(_read_engine, class_=AsyncSession, expire_on_commit=False)
+
 
 @asynccontextmanager
 async def session_scope(factory=None):
@@ -33,14 +39,6 @@ async def session_scope(factory=None):
 
 class Base(DeclarativeBase):
     pass
-
-
-async def get_session() -> AsyncSession:
-    async with async_session_factory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
 
 
 class AsyncPostgresSaver(PostgresSaver):
@@ -102,3 +100,24 @@ async def close_checkpointer(saver: AsyncPostgresSaver | None):
     pool = getattr(saver, "_pool", None)
     if pool is not None:
         await pool.close()
+
+
+async def cleanup_old_checkpoints(retention_days: int = 30):
+    """Delete checkpoint data older than retention_days from the checkpointer tables."""
+    from psycopg_pool import ConnectionPool
+
+    pool = ConnectionPool(settings.checkpointer_database_url, min_size=1, max_size=1, open=True)
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM langgraph_checkpoints WHERE created_at < NOW() - %s::interval",
+                    (f"{retention_days} days",),
+                )
+                cur.execute(
+                    "DELETE FROM langgraph_checkpoint_writes WHERE created_at < NOW() - %s::interval",
+                    (f"{retention_days} days",),
+                )
+                conn.commit()
+    finally:
+        pool.close()

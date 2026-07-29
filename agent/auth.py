@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, Request
 from passlib.hash import bcrypt
 from sqlalchemy import select
 
@@ -11,17 +11,19 @@ def _hexdigest(key: str) -> str:
     return bcrypt.hash(key)
 
 
-async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
+async def verify_api_key(request: Request, x_api_key: str = Header(None)) -> Merchant:
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
     if settings.allow_demo_key and x_api_key == settings.agent_api_key:
-        return Merchant(
+        merchant = Merchant(
             id=0,
             name="Demo Merchant",
             hashed_api_key=_hexdigest(x_api_key),
             shopify_store_domain=settings.shopify_store_domain,
         )
+        request.state.merchant_tier = "developer"
+        return merchant
 
     prefix = x_api_key[:8]
     async with session_scope(async_session_factory) as session:
@@ -31,6 +33,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> Merchant:
     for merchant in merchants:
         try:
             if bcrypt.verify(x_api_key, merchant.hashed_api_key):
+                request.state.merchant_tier = merchant.tier or "developer"
                 return merchant
         except Exception:
             continue

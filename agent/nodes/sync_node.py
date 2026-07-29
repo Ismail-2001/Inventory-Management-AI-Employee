@@ -16,7 +16,7 @@ async def sync_node(state: dict) -> dict:
 
     if settings.shopify_store_domain:
         synced_products = await sync_products_and_inventory()
-        synced_sales = await sync_sales_history(days=90)
+        synced_sales = await sync_sales_history(days=settings.sync_days)
 
     async with async_session_factory() as session:
         q = select(Sku)

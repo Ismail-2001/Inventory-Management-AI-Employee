@@ -35,6 +35,25 @@ class Sku(Base):
     alerts: Mapped[list["RiskAlert"]] = relationship(back_populates="sku", cascade="all, delete-orphan")
 
 
+class MerchantTier(str, enum.Enum):
+    developer = "developer"
+    business = "business"
+    enterprise = "enterprise"
+
+
+TIER_RATE_LIMITS: dict[MerchantTier, str] = {
+    MerchantTier.developer: "10/minute",
+    MerchantTier.business: "30/minute",
+    MerchantTier.enterprise: "100/minute",
+}
+
+TIER_DAILY_RUN_LIMITS: dict[MerchantTier, int] = {
+    MerchantTier.developer: 100,
+    MerchantTier.business: 1000,
+    MerchantTier.enterprise: 10000,
+}
+
+
 class Merchant(Base):
     __tablename__ = "merchants"
 
@@ -43,6 +62,7 @@ class Merchant(Base):
     hashed_api_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
     key_prefix: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
+    tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -185,6 +205,19 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
     hashed_password: Mapped[Optional[str]] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(16), default="staff")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FailedWebhook(Base):
+    __tablename__ = "failed_webhooks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[Optional[str]] = mapped_column(String(256))
+    event_type: Mapped[Optional[str]] = mapped_column(String(128))
+    payload_text: Mapped[Optional[str]] = mapped_column(Text)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
