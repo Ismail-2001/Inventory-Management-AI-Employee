@@ -20,6 +20,10 @@ from starlette.responses import JSONResponse
 from shared.log_config import configure_logging
 configure_logging()
 
+from agent.telemetry import setup_telemetry
+setup_telemetry()
+
+from opentelemetry import trace
 from api.rate_limit import limiter
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
 from api.routes.operations import router as ops_router
@@ -97,6 +101,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from agent.telemetry import RequestTracingMiddleware
+app.add_middleware(RequestTracingMiddleware)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():

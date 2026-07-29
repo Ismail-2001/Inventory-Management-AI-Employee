@@ -19,6 +19,41 @@ services:
       - inventory-agent
     restart: unless-stopped
 
+  backup:
+    image: postgres:16-alpine
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          echo "[backup] Starting backup at $$(date -Iseconds)"
+          PGPASSWORD="$${POSTGRES_PASSWORD}" pg_dump \
+            -h postgres \
+            -U "$${POSTGRES_USER}" \
+            -d "$${POSTGRES_DB}" \
+            --format=custom \
+            --compress=9 \
+            --file="/backups/inventory-agent-$$(date +%Y%m%d-%H%M%S).dump"
+          echo "[backup] Cleaning backups older than $$RETENTION_DAYS days"
+          find /backups -name "*.dump" -mtime "+$$RETENTION_DAYS" -delete
+          echo "[backup] Next backup in $$INTERVAL_SECONDS seconds"
+          sleep "$${INTERVAL_SECONDS}"
+        done
+    environment:
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory
+      POSTGRES_DB: inventory_agent
+      PGHOST: postgres
+      INTERVAL_SECONDS: ${BACKUP_INTERVAL:-86400}
+      RETENTION_DAYS: ${BACKUP_RETENTION:-30}
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   caddy_data:
   caddy_config:
+  backups:
