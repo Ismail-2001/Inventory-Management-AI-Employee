@@ -4,7 +4,6 @@ Run: uvicorn api.main:app --reload --port 8002
 """
 
 from fastapi import FastAPI, HTTPException, Header, Depends
-from typing import Optional
 import os
 
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse

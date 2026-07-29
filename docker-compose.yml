@@ -9,7 +9,7 @@ services:
       - AGENT_API_KEY=${AGENT_API_KEY:-demo-key-2024}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

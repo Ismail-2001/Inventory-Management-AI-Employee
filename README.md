@@ -27,6 +27,9 @@ cp .env.example .env
 docker compose up -d
 ```
 
+> Note: The current stack only runs the application container. A PostgreSQL database is expected
+> at the `DATABASE_URL` configured in `.env` (not included in `docker-compose.yml`).
+
 ### 3. Run Locally
 
 ```bash
@@ -73,7 +76,6 @@ curl -X POST http://localhost:8002/api/v1/analyze \
   "product_id": "SKU-001",
   "product_name": "Wireless Headphones",
   "current_stock": 150,
-  "recommended_stock": 500,
   "recommended_action": "maintain",
   "reorder_quantity": 0,
   "urgency": "low",
