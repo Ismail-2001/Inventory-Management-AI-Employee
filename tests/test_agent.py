@@ -56,10 +56,10 @@ def overstocked_item():
 
 def test_agent_initialization(agent):
     assert agent is not None
-    assert agent.system_prompt is not None
-    assert "MAINTAIN" in agent.system_prompt
-    assert "REORDER" in agent.system_prompt
-    assert "CLEARANCE" in agent.system_prompt
+    assert agent.llm.system_prompt is not None
+    assert "MAINTAIN" in agent.llm.system_prompt
+    assert "REORDER" in agent.llm.system_prompt
+    assert "CLEARANCE" in agent.llm.system_prompt
 
 
 def test_item_model():
