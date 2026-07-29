@@ -1,11 +1,14 @@
 """
-Inventory Agent - API Server
-Run: uvicorn api.main:app --reload --port 8002
+Inventory Agent — Production API Server
+Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 """
+
+import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from fastapi.staticfiles import StaticFiles
 
 from agent.db import close_checkpointer, create_checkpointer
 from agent.graph import build_graph
@@ -76,7 +79,7 @@ async def health(request: Request):
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": exc.__class__.__name__},
+        content={"detail": "Internal server error"},
     )
 
 app.include_router(run_sync_router)
@@ -92,30 +95,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
-    return {
-        "agent": "Inventory Agent",
-        "version": "1.0.0",
-        "status": "active",
-        "capabilities": [
-            "Single Item Analysis",
-            "Bulk Inventory Analysis",
-            "Demand Forecasting",
-            "Reorder Optimization",
-            "Stockout Prediction"
-        ],
-        "endpoints": {
-            "analyze": "POST /api/v1/analyze",
-            "bulk": "POST /api/v1/bulk",
-            "forecast": "POST /api/v1/forecast",
-            "health": "GET /health"
-        },
-        "docs": "/docs"
-    }
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
 @app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
+@limiter.limit("5/minute")
 async def analyze_inventory(
     request: Request,
     item: InventoryItem,
@@ -148,6 +134,7 @@ async def analyze_inventory(
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
+@limiter.limit("3/minute")
 async def analyze_bulk(
     request: Request,
     request_body: BulkAnalysisRequest,
@@ -162,6 +149,7 @@ async def analyze_bulk(
 
 
 @app.post("/api/v1/forecast", deprecated=True)
+@limiter.limit("5/minute")
 async def forecast_demand(
     request: Request,
     item: InventoryItem,
