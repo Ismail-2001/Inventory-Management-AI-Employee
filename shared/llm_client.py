@@ -39,10 +39,13 @@ MODEL_PRICING = {
     "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
+    "llama-3.1-8b-instant": {"input": 0.05, "output": 0.08},
+    "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
 }
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 class CircuitBreaker:
@@ -91,6 +94,7 @@ class LLMClient:
     ):
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
         self.system_prompt = system_prompt
         self.model = model or os.getenv("MODEL_NAME", "gemini-2.0-flash")
@@ -99,8 +103,22 @@ class LLMClient:
         self.max_retries = max_retries
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
 
-        self._use_gemini = bool(GOOGLE_API_KEY) if GOOGLE_API_KEY else bool(not OPENAI_API_KEY)
-        self._api_key = GOOGLE_API_KEY if self._use_gemini else OPENAI_API_KEY
+        if GROQ_API_KEY:
+            self._use_gemini = False
+            self._use_groq = True
+            self._api_key = GROQ_API_KEY
+        elif GOOGLE_API_KEY:
+            self._use_gemini = True
+            self._use_groq = False
+            self._api_key = GOOGLE_API_KEY
+        elif OPENAI_API_KEY:
+            self._use_gemini = False
+            self._use_groq = False
+            self._api_key = OPENAI_API_KEY
+        else:
+            self._use_gemini = True
+            self._use_groq = False
+            self._api_key = ""
 
         limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
         self._client = httpx.AsyncClient(timeout=timeout, limits=limits)
@@ -160,8 +178,10 @@ class LLMClient:
 
         if self._use_gemini:
             return await self._call_gemini(prompt)
+        elif self._use_groq:
+            return await self._call_openai(prompt, base_url=GROQ_URL)
         else:
-            return await self._call_openai(prompt)
+            return await self._call_openai(prompt, base_url=OPENAI_URL)
 
     async def _call_gemini(self, prompt: str) -> str:
         url = GEMINI_URL.format(model=self.model)
@@ -177,7 +197,7 @@ class LLMClient:
         data = r.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
-    async def _call_openai(self, prompt: str) -> str:
+    async def _call_openai(self, prompt: str, base_url: str = OPENAI_URL) -> str:
         payload = {
             "model": self.model,
             "messages": [
@@ -188,7 +208,7 @@ class LLMClient:
             "max_tokens": self.max_tokens,
         }
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
-        r = await self._client.post(OPENAI_URL, json=payload, headers=headers)
+        r = await self._client.post(base_url, json=payload, headers=headers)
         r.raise_for_status()
         data = r.json()
         return data["choices"][0]["message"]["content"]
