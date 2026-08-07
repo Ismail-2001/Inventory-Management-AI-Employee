@@ -106,7 +106,7 @@ jobs:
       - name: Run eval suite
         run: pytest tests/eval_suite.py -v
 
-  frontend-build:
+  frontend-tests:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -119,11 +119,13 @@ jobs:
           cache-dependency-path: inventory-frontend/package-lock.json
       - name: Install frontend dependencies
         run: cd inventory-frontend && npm ci
+      - name: Run unit tests
+        run: cd inventory-frontend && npm test
       - name: Build frontend
         run: cd inventory-frontend && npm run build
 
   docker-build:
-    needs: [unit-tests, integration-tests, eval-suite, frontend-build]
+    needs: [unit-tests, integration-tests, eval-suite, frontend-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15

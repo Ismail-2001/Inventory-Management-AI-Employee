@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 7+" />
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/tests-142%20passing-22c55e?style=flat-square" alt="142 Tests" />
+  <img src="https://img.shields.io/badge/tests-195%20passing-22c55e?style=flat-square" alt="195 Tests" />
   <img src="https://img.shields.io/badge/license-proprietary-F05032?style=flat-square" alt="License" />
 </p>
 
@@ -164,7 +164,7 @@ flowchart LR
 |---|---|
 | **API Authentication** | bcrypt-hashed keys with prefix-based lookup + SSO session tokens |
 | **Role-Based Access** | `owner` / `staff` / `viewer` — enforced per endpoint |
-| **Rate Limiting** | Tiered: `developer` 10/min, `business` 30/min, `enterprise` 100/min |
+| **Rate Limiting** | Redis-backed slowapi with tier-based limits (developer 10/min, business 30/min, enterprise 100/min) |
 | **Webhook Verification** | HMAC-SHA256 with shop-specific secret |
 | **Request Security** | CSP headers, HSTS, X-Frame-Options (DENY), 1MB request size limit |
 | **Action Tokens** | HMAC-SHA256 signed, 4-hour TTL, no API key exposure |
@@ -194,7 +194,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — lint → test → eval → load test → Docker push |
-| **Testing** | 142 tests — unit, integration, eval (LLM-as-Judge), webhook contracts |
+| **Testing** | 195 tests — backend unit/integration/eval/contracts + frontend Vitest + Playwright E2E |
 
 ---
 
@@ -448,23 +448,30 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Full test suite (142 tests)
+# Backend — full test suite (142 tests)
 pytest tests/ -v
 
-# Unit tests only (no external dependencies)
+# Backend — unit tests only (no external dependencies)
 pytest tests/ -v --ignore=tests/test_integration.py
 
-# Integration tests (requires PostgreSQL)
+# Backend — integration tests (requires PostgreSQL)
 pytest tests/test_integration.py -v
 
-# LLM eval suite (forecast accuracy, risk classification, ordering logic)
+# Backend — LLM eval suite (forecast accuracy, risk classification, ordering logic)
 pytest tests/test_llm_eval.py -v
 
-# Webhook contract tests
+# Backend — webhook contract tests
 pytest tests/test_webhook_contracts.py -v
 
-# Enterprise feature tests (SSO, audit, branding)
+# Backend — enterprise feature tests (SSO, audit, branding)
 pytest tests/test_enterprise.py -v
+
+# Frontend — unit tests (53 tests, Vitest + React Testing Library)
+cd inventory-frontend
+npm test
+
+# Frontend — E2E tests (Playwright, requires running stack)
+npm run test:e2e
 ```
 
 ### Load Testing
@@ -488,11 +495,12 @@ BASE_URL=http://localhost:8002 k6 run load/load_test.js
 Every push to `main`:
 
 1. **Lint**: Ruff (Python code style)
-2. **Test**: 142 tests with PostgreSQL + Redis service containers
+2. **Backend Tests**: 142 tests with PostgreSQL service container
 3. **Eval**: Forecast accuracy + LLM-as-Judge quality scoring
-4. **Build**: React frontend production build
-5. **Scan**: Trivy container vulnerability scan
-6. **Package**: Multi-stage Docker image → GitHub Container Registry (`ghcr.io`)
+4. **Frontend Tests**: 53 Vitest unit tests + production build
+5. **Build**: Docker image (multi-stage)
+6. **Scan**: Trivy container vulnerability scan
+7. **Package**: Push to GitHub Container Registry (`ghcr.io`)
 
 ---
 
@@ -636,7 +644,10 @@ inventory-agent/
 │   ├── task_queue.py         # Background task queue
 │   └── whitelabel.py         # Merchant branding
 ├── inventory-frontend/       # React 19 dashboard
-├── tests/                    # 142 test cases
+│   ├── src/                  # Components, pages, utilities
+│   ├── e2e/                  # Playwright E2E tests
+│   └── vitest.config.ts      # Unit test config
+├── tests/                    # 142 backend test cases
 ├── alembic/                  # Database migrations
 ├── load/                     # k6 load tests
 ├── docker-compose.yml        # Development environment
@@ -657,11 +668,12 @@ inventory-agent/
 | **White-Label** | Complete | Custom email templates per merchant |
 | **LLM Evals** | Complete | LLM-as-Judge with production data |
 | **Load Testing** | Complete (k6) | Distributed load testing (k6-operator on k8s) |
-| **Per-Merchant Rate Limiting** | — | Tier-based rate limiting middleware |
-| **Database Indexes** | — | Composite indexes for query optimization |
+| **Per-Merchant Rate Limiting** | Complete | Redis-backed tier-based enforcement |
+| **Database Indexes** | Complete | 8 composite indexes for hot query paths |
+| **Frontend Tests** | Complete (53 tests) | Component-level coverage expansion |
+| **E2E Tests** | Complete (Playwright) | Cross-browser testing (Firefox, WebKit) |
+| **Graceful Shutdown** | Complete | Signal handling, inflight drain, connection cleanup |
 | **Monitoring Alerts** | — | Prometheus alerting rules + PagerDuty |
-| **Frontend Tests** | — | Vitest + React Testing Library |
-| **E2E Tests** | — | Playwright critical path tests |
 | **Multi-Warehouse** | — | Location-aware inventory tracking |
 | **Multi-Channel** | — | Amazon SP-API integration |
 
