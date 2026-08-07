@@ -17,7 +17,7 @@ def _block_real_network_calls():
     with (
         patch("agent.shopify_sync.sync_products_and_inventory", return_value=0),
         patch("agent.shopify_sync.sync_sales_history", return_value=0),
-        patch("agent.nodes.notify_node.httpx.AsyncClient"),
+        patch("shared.slack.httpx.AsyncClient"),
     ):
         yield
 
@@ -38,7 +38,7 @@ async def test_graph_sends_pending_notification_before_resume():
 
     with (
         patch("agent.nodes.notify_node.settings") as mock_settings,
-        patch("agent.nodes.notify_node.httpx.AsyncClient") as client_cls,
+        patch("shared.slack.httpx.AsyncClient") as client_cls,
     ):
         mock_settings.slack_webhook_url = "https://hooks.slack.com/services/TEST"
         mock_settings.public_api_url = "http://localhost:8002"
@@ -200,7 +200,7 @@ async def test_empty_state_returns_unchanged():
 
 @pytest.mark.asyncio
 async def test_slack_message_has_critical_and_warning_sections(state_with_alerts_and_pos):
-    with patch("agent.nodes.notify_node.httpx.AsyncClient") as mock_client:
+    with patch("shared.slack.httpx.AsyncClient") as mock_client:
         mock_post = AsyncMock()
         mock_client.return_value.__aenter__ = AsyncMock(return_value=type("Ctx", (), {"post": mock_post})())
         mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -224,7 +224,7 @@ async def test_slack_message_has_critical_and_warning_sections(state_with_alerts
 async def test_slack_post_called_with_webhook_url(state_with_alerts_and_pos):
     with (
         patch("agent.nodes.notify_node.settings") as mock_settings,
-        patch("agent.nodes.notify_node.httpx.AsyncClient") as mock_client,
+        patch("shared.slack.httpx.AsyncClient") as mock_client,
     ):
         mock_settings.slack_webhook_url = "https://hooks.slack.com/services/TEST"
         mock_settings.shopify_store_domain = "test-store.myshopify.com"
@@ -246,7 +246,7 @@ async def test_critical_only_skips_warnings_line():
         "risk_alerts": [{"sku_id": 7, "risk_level": "critical", "reason": "Zero stock"}],
         "purchase_orders": [{"po_id": 20, "quantity": 100, "total_cost": 1500.0}],
     }
-    with patch("agent.nodes.notify_node.httpx.AsyncClient") as mock_client:
+    with patch("shared.slack.httpx.AsyncClient") as mock_client:
         mock_post = AsyncMock()
         mock_client.return_value.__aenter__ = AsyncMock(return_value=type("Ctx", (), {"post": mock_post})())
         mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -263,7 +263,7 @@ async def test_critical_only_skips_warnings_line():
 async def test_no_webhook_skips_http(state_with_alerts_and_pos):
     with (
         patch("agent.nodes.notify_node.settings") as mock_settings,
-        patch("agent.nodes.notify_node.httpx.AsyncClient") as mock_client,
+        patch("shared.slack.httpx.AsyncClient") as mock_client,
     ):
         mock_settings.slack_webhook_url = None
         mock_settings.shopify_store_domain = "test-store.myshopify.com"
@@ -296,7 +296,7 @@ async def test_no_real_shopify_calls():
     with (
         patch("agent.shopify_sync.sync_products_and_inventory", return_value=0) as mock_sync_products,
         patch("agent.shopify_sync.sync_sales_history", return_value=0) as mock_sync_sales,
-        patch("agent.nodes.notify_node.httpx.AsyncClient") as mock_client,
+        patch("shared.slack.httpx.AsyncClient") as mock_client,
     ):
         mock_post = AsyncMock()
         mock_client.return_value.__aenter__ = AsyncMock(return_value=type("Ctx", (), {"post": mock_post})())

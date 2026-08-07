@@ -3,12 +3,22 @@ import time
 from functools import wraps
 
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 
 from agent.config import settings
+
+
+class _NoOpExporter(SpanExporter):
+    def export(self, spans):
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self):
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000):
+        pass
 
 
 _tracer = None
@@ -24,11 +34,15 @@ def setup_telemetry():
 
     otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
     if otel_endpoint:
-        exporter = OTLPSpanExporter(endpoint=otel_endpoint)
+        try:
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+            exporter = OTLPSpanExporter(endpoint=otel_endpoint)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
+        except Exception:
+            pass
     else:
-        exporter = ConsoleSpanExporter()
+        provider.add_span_processor(BatchSpanProcessor(_NoOpExporter()))
 
-    provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer(__name__)
 

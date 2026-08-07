@@ -1,3 +1,4 @@
 {$DOMAIN::80} {
+    header_up X-API-Key "{$AGENT_API_KEY}"
     reverse_proxy * inventory-agent:8002
 }

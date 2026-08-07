@@ -22,7 +22,10 @@ async def run_sync(request: Request, merchant=Depends(verify_api_key)):
     graph = request.app.state.graph
     try:
         result = await asyncio.wait_for(
-            graph.ainvoke({"merchant_id": merchant.id}, {"configurable": {"thread_id": thread_id}}),
+            graph.ainvoke(
+                {"merchant_id": merchant.id, "thread_id": thread_id},
+                {"configurable": {"thread_id": thread_id}},
+            ),
             timeout=120.0,
         )
     except asyncio.TimeoutError:
@@ -51,7 +54,7 @@ async def run_sync_async(request: Request, merchant=Depends(verify_api_key)):
     """
     thread_id = str(uuid.uuid4())
     task_id = await task_queue.enqueue(
-        {"merchant_id": merchant.id},
+        {"merchant_id": merchant.id, "thread_id": thread_id},
         {"configurable": {"thread_id": thread_id}},
     )
     return {

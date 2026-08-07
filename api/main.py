@@ -4,6 +4,9 @@ Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 """
 
 import os
+import uuid
+import time
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -35,6 +38,8 @@ from api.routes.webhooks import router as webhooks_router
 from agent.auth import verify_api_key
 from agent.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 _dev_notifications: list[dict] = []
 
@@ -60,10 +65,23 @@ async def lifespan(app: FastAPI):
     from agent.scheduler import start
     start()
 
+    try:
+        from shared.redis_cache import _get_redis
+        r = _get_redis()
+        if r is not None:
+            await r.ping()
+    except Exception:
+        pass
+
     yield
 
     await task_queue.stop()
     await close_checkpointer(getattr(app.state, "checkpointer", None))
+    try:
+        from shared.redis_cache import close_redis
+        await close_redis()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -80,8 +98,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 from starlette.middleware.base import BaseHTTPMiddleware
 from passlib.hash import bcrypt
 from agent.models import Merchant, MerchantTier
+from agent.config import settings as _cfg
 
-_tier_cache: dict[str, MerchantTier] = {}
+if _cfg.redis_url:
+    try:
+        from shared.redis_cache import RedisCache as _TierCache
+        _tier_cache = _TierCache(namespace="tier", ttl_seconds=300, max_size=200)
+    except Exception:
+        from collections import OrderedDict
+        _tier_cache = None
+else:
+    _tier_cache = None
+
+if _tier_cache is None:
+    from collections import OrderedDict
+    _tier_cache_dict: OrderedDict[str, MerchantTier] = OrderedDict()
+else:
+    _tier_cache_dict = None
+
 _TIER_CACHE_MAX = 200
 
 class TierLookupMiddleware(BaseHTTPMiddleware):
@@ -89,26 +123,47 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
         api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
         if api_key:
             prefix = api_key[:8]
-            cached = _tier_cache.get(prefix)
-            if cached:
-                request.state.merchant_tier = cached
-            elif prefix:
-                try:
-                    from agent.db import async_session_factory
-                    from sqlalchemy import select
-                    async with async_session_factory() as session:
-                        result = await session.execute(
-                            select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
-                        )
-                        merchant = result.scalar_one_or_none()
-                        if merchant:
-                            tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
-                            if len(_tier_cache) >= _TIER_CACHE_MAX:
-                                _tier_cache.clear()
-                            _tier_cache[prefix] = tier
-                            request.state.merchant_tier = tier
-                except Exception:
-                    pass
+            if _tier_cache is not None:
+                cached = await _tier_cache.get(prefix)
+                if cached is not None:
+                    request.state.merchant_tier = MerchantTier(cached) if isinstance(cached, str) else cached
+                elif prefix:
+                    try:
+                        from agent.db import async_session_factory
+                        from sqlalchemy import select
+                        async with async_session_factory() as session:
+                            result = await session.execute(
+                                select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
+                            )
+                            merchant = result.scalar_one_or_none()
+                            if merchant:
+                                tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                                await _tier_cache.set(prefix, tier.value)
+                                request.state.merchant_tier = tier
+                    except Exception:
+                        pass
+            elif _tier_cache_dict is not None:
+                cached = _tier_cache_dict.get(prefix)
+                if cached is not None:
+                    _tier_cache_dict.move_to_end(prefix)
+                    request.state.merchant_tier = cached
+                elif prefix:
+                    try:
+                        from agent.db import async_session_factory
+                        from sqlalchemy import select
+                        async with async_session_factory() as session:
+                            result = await session.execute(
+                                select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
+                            )
+                            merchant = result.scalar_one_or_none()
+                            if merchant:
+                                tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                                _tier_cache_dict[prefix] = tier
+                                if len(_tier_cache_dict) > _TIER_CACHE_MAX:
+                                    _tier_cache_dict.popitem(last=False)
+                                request.state.merchant_tier = tier
+                    except Exception:
+                        pass
         return await call_next(request)
 
 app.add_middleware(TierLookupMiddleware)
@@ -132,6 +187,26 @@ async def dev_webhook_log():
     return _dev_notifications
 
 
+@app.get("/api/v1/config")
+async def frontend_config():
+    result = {}
+    if settings.environment == "production":
+        result["auth_mode"] = "proxy"
+    else:
+        result["auth_mode"] = "key"
+        result["api_key"] = settings.agent_api_key
+
+    from agent.sso import get_sso_providers
+    providers = get_sso_providers()
+    result["sso_enabled"] = len(providers) > 0
+    result["sso_providers"] = [
+        {"name": p.name, "type": p.provider_type}
+        for p in providers
+    ]
+
+    return result
+
+
 @app.get("/health")
 async def health(request: Request):
     result = {
@@ -151,6 +226,23 @@ async def health(request: Request):
     except Exception:
         result["status"] = "degraded"
         result["database"] = "error"
+    try:
+        from shared.redis_cache import _get_redis
+        r = _get_redis()
+        if r is not None:
+            await r.ping()
+            result["redis"] = "ok"
+        else:
+            result["redis"] = "not_configured"
+    except Exception:
+        result["redis"] = "error"
+        if result["status"] == "healthy":
+            result["status"] = "degraded"
+
+    from agent.sso import get_sso_providers
+    sso_providers = get_sso_providers()
+    result["sso"] = "configured" if sso_providers else "not_configured"
+
     return result
 
 @app.exception_handler(Exception)
@@ -168,6 +260,15 @@ from api.routes.keys import router as keys_router
 app.include_router(keys_router)
 from api.routes.usage import router as usage_router
 app.include_router(usage_router)
+from api.routes.audit import router as audit_router
+app.include_router(audit_router)
+from api.routes.sso import router as sso_router
+app.include_router(sso_router)
+from api.routes.branding import router as branding_router
+app.include_router(branding_router)
+
+from shared.metrics import setup_metrics
+setup_metrics(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -220,6 +321,41 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+class CorrelationIdMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        from shared.metrics import metrics
+        request = Request(scope, receive)
+        correlation_id = request.headers.get("X-Correlation-Id") or str(uuid.uuid4())
+        start = time.perf_counter()
+        status_code = 500
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 500)
+                headers = list(message.get("headers", []))
+                headers.append((b"x-correlation-id", correlation_id.encode()))
+                message["headers"] = headers
+            await send(message)
+
+        scope["correlation_id"] = correlation_id
+        await self.app(scope, receive, send_wrapper)
+        elapsed = time.perf_counter() - start
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+        metrics.inc("http_requests_total", method=method, path=path, status=str(status_code))
+        metrics.observe("http_request_duration_seconds", elapsed, method=method, path=path)
+
+app.add_middleware(CorrelationIdMiddleware)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():

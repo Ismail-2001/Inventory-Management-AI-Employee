@@ -44,7 +44,7 @@ async def test_same_idempotency_key_only_changes_state_once(monkeypatch):
     class FakeIdempotencyKey:
         pass
 
-    async def fake_session_factory():
+    def fake_session_factory():
         return FakeSession(None)
 
     monkeypatch.setattr(purchase_orders, "async_session_factory", fake_session_factory)

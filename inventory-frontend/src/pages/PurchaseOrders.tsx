@@ -10,6 +10,13 @@ const container = {
   show: { opacity: 1, transition: { staggerChildren: 0.08 } },
 }
 
+interface PoPage {
+  items: PurchaseOrder[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export default function PurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [approving, setApproving] = useState<number | null>(null)
@@ -19,8 +26,8 @@ export default function PurchaseOrders() {
 
   const fetchOrders = async () => {
     try {
-      const data = await api.get<PurchaseOrder[]>('/po')
-      setOrders(Array.isArray(data) ? data : [])
+      const data = await api.get<PoPage>('/po')
+      setOrders(Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [])
     } catch { }
   }
 

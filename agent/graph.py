@@ -38,15 +38,7 @@ def build_graph() -> StateGraph:
     return workflow
 
 
-_compiled_graph_cache = None
-_checkpointer = None
-
-
 async def get_compiled_graph():
-    global _compiled_graph_cache, _checkpointer
-    if _compiled_graph_cache is not None:
-        return _compiled_graph_cache
-    _checkpointer = create_checkpointer()
+    checkpointer = create_checkpointer()
     graph = build_graph()
-    _compiled_graph_cache = graph.compile(checkpointer=_checkpointer, interrupt_after=["notify_pending"])
-    return _compiled_graph_cache
+    return graph.compile(checkpointer=checkpointer, interrupt_after=["notify_pending"])

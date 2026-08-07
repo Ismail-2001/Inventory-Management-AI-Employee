@@ -6,15 +6,18 @@ For multi-replica deployments, replace with ARQ/Celery + Redis.
 """
 import asyncio
 import uuid
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import HTTPException
+
+_MAX_RESULTS = 200
 
 
 class BackgroundTaskQueue:
     def __init__(self):
         self._queue: asyncio.Queue = asyncio.Queue()
-        self._results: dict[str, Any] = {}
+        self._results: OrderedDict[str, Any] = OrderedDict()
         self._worker: asyncio.Task | None = None
 
     def start(self, app):
@@ -49,6 +52,8 @@ class BackgroundTaskQueue:
                     timeout=120.0,
                 )
                 self._results[task_id] = result
+                if len(self._results) > _MAX_RESULTS:
+                    self._results.popitem(last=False)
             except asyncio.TimeoutError:
                 self._results[task_id] = {"error": "Graph execution timed out"}
             except Exception:

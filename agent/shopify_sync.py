@@ -21,6 +21,26 @@ def _shopify_client() -> httpx.AsyncClient:
     return client
 
 
+def _extract_stock_from_levels(levels: list, fallback_stock: int, fallback_location_id: int | None = None) -> tuple[int, int | None]:
+    stock = fallback_stock
+    location_id = fallback_location_id
+    for le in levels:
+        loc = le["node"].get("location", {})
+        location_id = _parse_gid(loc["id"]) if loc.get("id") else location_id
+        quantities = le["node"].get("quantities", [])
+        if isinstance(quantities, list):
+            for qe in quantities:
+                stock = qe.get("quantity", stock)
+                break
+        elif isinstance(quantities, dict):
+            edges = quantities.get("edges", [])
+            for qe in edges:
+                stock = qe.get("node", {}).get("quantity", stock)
+                break
+        break
+    return stock, location_id
+
+
 PRODUCTS_QUERY = """
 query ProductsQuery($cursor: String) {
   products(first: 50, after: $cursor) {
@@ -88,6 +108,7 @@ async def sync_products_and_inventory() -> int:
             )
 
             products = data["data"]["products"]
+            batch = []
             for edge in products["edges"]:
                 product = edge["node"]
                 product_title = product["title"]
@@ -101,42 +122,33 @@ async def sync_products_and_inventory() -> int:
                     inv_item = variant.get("inventoryItem")
                     if inv_item:
                         levels = inv_item.get("inventoryLevels", {}).get("edges", [])
-                        for le in levels:
-                            loc = le["node"].get("location", {})
-                            location_id = _parse_gid(loc["id"]) if loc.get("id") else None
-                            quantities = le["node"].get("quantities", [])
-                            if isinstance(quantities, list):
-                                for qe in quantities:
-                                    stock = qe.get("quantity", stock)
-                                    break
-                            elif isinstance(quantities, dict):
-                                edges = quantities.get("edges", [])
-                                for qe in edges:
-                                    stock = qe.get("node", {}).get("quantity", stock)
-                                    break
-                            break
+                        stock, location_id = _extract_stock_from_levels(levels, stock)
 
-                    async with async_session_factory() as session:
-                        stmt = pg_insert(Sku).values(
-                            shopify_variant_id=variant_id,
-                            sku_code=sku_code,
-                            title=product_title,
-                            current_stock=stock,
-                            location_id=location_id,
-                        )
-                        stmt = stmt.on_conflict_do_update(
-                            index_elements=["shopify_variant_id"],
-                            set_={
-                                "sku_code": stmt.excluded.sku_code,
-                                "title": stmt.excluded.title,
-                                "current_stock": stmt.excluded.current_stock,
-                                "location_id": stmt.excluded.location_id,
-                                "updated_at": func.now(),
-                            },
-                        )
+                    stmt = pg_insert(Sku).values(
+                        shopify_variant_id=variant_id,
+                        sku_code=sku_code,
+                        title=product_title,
+                        current_stock=stock,
+                        location_id=location_id,
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["shopify_variant_id"],
+                        set_={
+                            "sku_code": stmt.excluded.sku_code,
+                            "title": stmt.excluded.title,
+                            "current_stock": stmt.excluded.current_stock,
+                            "location_id": stmt.excluded.location_id,
+                            "updated_at": func.now(),
+                        },
+                    )
+                    batch.append(stmt)
+
+            if batch:
+                async with async_session_factory() as session:
+                    for stmt in batch:
                         await session.execute(stmt)
-                        await session.commit()
-                        synced += 1
+                    await session.commit()
+                    synced += len(batch)
 
             has_next = products["pageInfo"]["hasNextPage"]
             cursor = products["pageInfo"]["endCursor"]
@@ -186,20 +198,7 @@ async def sync_single_variant(shopify_inventory_item_id: str) -> bool:
 
         location_id = None
         levels = item.get("inventoryLevels", {}).get("edges", [])
-        for le in levels:
-            loc = le["node"].get("location", {})
-            location_id = _parse_gid(loc["id"]) if loc.get("id") else None
-            quantities = le["node"].get("quantities", [])
-            if isinstance(quantities, list):
-                for qe in quantities:
-                    stock = qe.get("quantity", stock)
-                    break
-            elif isinstance(quantities, dict):
-                edges = quantities.get("edges", [])
-                for qe in edges:
-                    stock = qe.get("node", {}).get("quantity", stock)
-                    break
-            break
+        stock, location_id = _extract_stock_from_levels(levels, stock)
 
         async with async_session_factory() as session:
             stmt = pg_insert(Sku).values(
@@ -271,6 +270,9 @@ async def sync_sales_history(days: int = 90) -> int:
             )
 
             orders = data["data"]["orders"]
+            batch = []
+            sku_lookups: list[tuple[int, str, int, date]] = []
+
             for edge in orders["edges"]:
                 order = edge["node"]
                 order_date = _parse_shopify_date(order["createdAt"])
@@ -285,37 +287,60 @@ async def sync_sales_history(days: int = 90) -> int:
                         continue
 
                     sku_code: str | None = (var or {}).get("sku") or li.get("sku")
-
                     if not sku_code and not variant_id:
                         continue
 
-                    async with async_session_factory() as session:
-                        sku = None
-                        if sku_code:
-                            result = await session.execute(
-                                select(Sku).where(Sku.sku_code == sku_code).limit(1)
-                            )
-                            sku = result.scalar_one_or_none()
-                        if sku is None and variant_id:
-                            result = await session.execute(
-                                select(Sku).where(Sku.shopify_variant_id == variant_id).limit(1)
-                            )
-                            sku = result.scalar_one_or_none()
-                        if sku is None:
-                            continue
+                    sku_lookups.append((0, sku_code or "", variant_id or "", quantity))
+                    batch.append((order_date, quantity, sku_code, variant_id))
 
-                        stmt = pg_insert(SalesHistory).values(
-                            sku_id=sku.id,
-                            date=order_date,
-                            units_sold=quantity,
-                        )
-                        stmt = stmt.on_conflict_do_update(
-                            constraint="uq_sales_history_sku_date",
-                            set_={"units_sold": SalesHistory.units_sold + quantity},
-                        )
-                        await session.execute(stmt)
-                        await session.commit()
-                        synced += 1
+            if not batch:
+                has_next = orders["pageInfo"]["hasNextPage"]
+                cursor = orders["pageInfo"]["endCursor"]
+                continue
+
+            async with async_session_factory() as session:
+                sku_by_code: dict[str, Sku] = {}
+                sku_by_vid: dict[str, Sku] = {}
+
+                all_sku_codes = [b[2] for b in batch if b[2]]
+                all_variant_ids = [b[3] for b in batch if b[3]]
+
+                if all_sku_codes:
+                    result = await session.execute(
+                        select(Sku).where(Sku.sku_code.in_(all_sku_codes))
+                    )
+                    for s in result.scalars().all():
+                        sku_by_code[s.sku_code] = s
+
+                if all_variant_ids:
+                    result = await session.execute(
+                        select(Sku).where(Sku.shopify_variant_id.in_(all_variant_ids))
+                    )
+                    for s in result.scalars().all():
+                        sku_by_vid[s.shopify_variant_id] = s
+
+                for order_date, quantity, sku_code, variant_id in batch:
+                    sku = None
+                    if sku_code and sku_code in sku_by_code:
+                        sku = sku_by_code[sku_code]
+                    if sku is None and variant_id and variant_id in sku_by_vid:
+                        sku = sku_by_vid[variant_id]
+                    if sku is None:
+                        continue
+
+                    stmt = pg_insert(SalesHistory).values(
+                        sku_id=sku.id,
+                        date=order_date,
+                        units_sold=quantity,
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_sales_history_sku_date",
+                        set_={"units_sold": SalesHistory.units_sold + quantity},
+                    )
+                    await session.execute(stmt)
+                    synced += 1
+
+                await session.commit()
 
             has_next = orders["pageInfo"]["hasNextPage"]
             cursor = orders["pageInfo"]["endCursor"]

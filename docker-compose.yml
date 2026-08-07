@@ -8,8 +8,11 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory}@postgres:5432/${POSTGRES_DB:-inventory_agent}
       CHECKPOINTER_DATABASE_URL: postgresql://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory}@postgres:5432/${POSTGRES_DB:-inventory_agent}
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      postgres:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -27,6 +30,36 @@ services:
     cap_drop:
       - ALL
     stop_grace_period: 30s
+
+  migrate:
+    build: .
+    entrypoint: ["python", "-m", "alembic", "upgrade", "head"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory}@postgres:5432/${POSTGRES_DB:-inventory_agent}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: redis-server --maxmemory 200mb --maxmemory-policy allkeys-lru
 
   postgres:
     image: postgres:16-alpine
@@ -51,3 +84,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

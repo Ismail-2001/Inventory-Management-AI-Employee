@@ -92,6 +92,10 @@ class Settings:
         default_factory=lambda: os.getenv("DATABASE_READ_URL", "")
     )
 
+    redis_url: str = field(
+        default_factory=lambda: os.getenv("REDIS_URL", "")
+    )
+
     deployment_region: str = field(
         default_factory=lambda: os.getenv("DEPLOYMENT_REGION", "local")
     )
@@ -113,6 +117,37 @@ class Settings:
         default_factory=lambda: [
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()
         ]
+    )
+
+    sso_oidc_name: str = field(
+        default_factory=lambda: os.getenv("SSO_OIDC_NAME", "")
+    )
+    sso_oidc_client_id: str = field(
+        default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_ID", "")
+    )
+    sso_oidc_client_secret: str = field(
+        default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_SECRET", "")
+    )
+    sso_oidc_discovery_url: str = field(
+        default_factory=lambda: os.getenv("SSO_OIDC_DISCOVERY_URL", "")
+    )
+    sso_saml_name: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_NAME", "")
+    )
+    sso_saml_entity_id: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_ENTITY_ID", "")
+    )
+    sso_saml_sso_url: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_SSO_URL", "")
+    )
+    sso_saml_slo_url: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_SLO_URL", "")
+    )
+    sso_saml_certificate: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_CERTIFICATE", "")
+    )
+    sso_allowed_domains: str = field(
+        default_factory=lambda: os.getenv("SSO_ALLOWED_DOMAINS", "")
     )
 
     def validate_required(self):

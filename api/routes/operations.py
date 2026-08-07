@@ -20,7 +20,11 @@ router = APIRouter()
 async def list_skus(request: Request, merchant=Depends(verify_api_key)):
     factory = async_session_factory_readonly or async_session_factory
     async with factory() as session:
-        result = await session.execute(select(Sku).order_by(Sku.id))
+        query = select(Sku)
+        if merchant.id and merchant.id != 0:
+            query = query.where(Sku.merchant_id == merchant.id)
+        query = query.order_by(Sku.id)
+        result = await session.execute(query)
         skus = result.scalars().all()
 
     return [

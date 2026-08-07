@@ -273,16 +273,16 @@ Provide:
             action = "reorder"
             reorder_qty = int(item.daily_sales * 30)
             reasoning = f"HIGH: {days_of_stock:.0f} days of stock remaining. Reorder soon to prevent stockout."
-        elif days_of_stock > 90:
-            urgency = "medium"
-            action = "clearance"
-            reorder_qty = 0
-            reasoning = f"OVERSTOCKED: {days_of_stock:.0f} days of stock. Consider promotions to reduce inventory."
         elif days_of_stock > 180:
             urgency = "high"
             action = "discontinue"
             reorder_qty = 0
             reasoning = f"EXCESS STOCK: {days_of_stock:.0f} days of stock. Consider liquidation."
+        elif days_of_stock > 90:
+            urgency = "medium"
+            action = "clearance"
+            reorder_qty = 0
+            reasoning = f"OVERSTOCKED: {days_of_stock:.0f} days of stock. Consider promotions to reduce inventory."
         else:
             urgency = "low"
             action = "maintain"

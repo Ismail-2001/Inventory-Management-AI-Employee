@@ -54,7 +54,7 @@ async def _generate_insight(acceptance: dict, forecast: dict | list) -> str:
     try:
         result = await llm_agent.llm.call(prompt)
         if result and result.text and len(result.text) > 30:
-            await log_llm_call("reflection", result.text)
+            await log_llm_call("reflection", result.text, prompt)
             return result.text.strip()
     except Exception:
         pass

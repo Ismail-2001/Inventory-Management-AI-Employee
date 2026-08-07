@@ -40,7 +40,7 @@ async def test_duplicate_webhook_event_id_only_processed_once(monkeypatch):
     async def fake_handler(payload):
         processed.append(payload)
 
-    async def fake_session_factory():
+    def fake_session_factory():
         return FakeSession(None)
 
     class FakeRequest:
@@ -49,8 +49,11 @@ async def test_duplicate_webhook_event_id_only_processed_once(monkeypatch):
         async def body(self):
             return b'{"id": 1}'
 
+    async def fake_verify(request):
+        return b'{"id": 1}'
+
     monkeypatch.setattr(webhooks, "async_session_factory", fake_session_factory)
-    monkeypatch.setattr(webhooks, "verify_shopify_webhook", lambda request: b'{"id": 1}')
+    monkeypatch.setattr(webhooks, "verify_shopify_webhook", fake_verify)
 
     first = await webhooks.handle_webhook_event(FakeRequest(), "orders_create", fake_handler)
     second = await webhooks.handle_webhook_event(FakeRequest(), "orders_create", fake_handler)

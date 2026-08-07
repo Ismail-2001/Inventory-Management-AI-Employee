@@ -63,6 +63,7 @@ class Merchant(Base):
     key_prefix: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
     tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
+    branding: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

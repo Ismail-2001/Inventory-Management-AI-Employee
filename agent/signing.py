@@ -17,7 +17,7 @@ def _secret() -> str:
     return settings.agent_api_key
 
 
-def sign_token(po_id: int, action: str, ttl_seconds: int = 172800) -> str:
+def sign_token(po_id: int, action: str, ttl_seconds: int = 14400) -> str:
     expiry = int(time.time()) + ttl_seconds
     msg = f"{po_id}:{action}:{expiry}"
     sig = hmac.new(_secret().encode(), msg.encode(), hashlib.sha256).hexdigest()

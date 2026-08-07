@@ -5,12 +5,25 @@ services:
       - "8002"
     environment:
       ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  migrate:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-inventory-agent}:${IMAGE_TAG:-latest}
+    entrypoint: ["python", "-m", "alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    restart: "no"
 
   caddy:
     image: caddy:alpine
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      AGENT_API_KEY: ${AGENT_API_KEY}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

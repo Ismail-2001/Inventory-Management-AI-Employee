@@ -4,7 +4,6 @@ import hmac
 import json
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from inspect import isawaitable
 from typing import Awaitable, Callable
 
 from fastapi import HTTPException, Request
@@ -81,8 +80,7 @@ async def handle_webhook_event(request: Request, event_type: str, handler: Calla
     if await _webhook_already_processed(event_id):
         return {"status": "ignored", "reason": "duplicate_webhook", "event_id": event_id}
 
-    verified_body = verify_shopify_webhook(request)
-    body = await verified_body if isawaitable(verified_body) else verified_body
+    body = await verify_shopify_webhook(request)
     payload = json.loads(body)
     try:
         await handler(payload)
@@ -106,6 +104,7 @@ async def retry_failed_webhooks(max_retries: int = 3):
         failed = result.scalars().all()
 
     for fw in failed:
+        fw_id = fw.id
         try:
             payload = json.loads(fw.payload_text)
             event_type = fw.event_type or ""
@@ -116,13 +115,17 @@ async def retry_failed_webhooks(max_retries: int = 3):
             elif event_type == "products_update":
                 await handle_product_update(payload)
             async with session_scope(async_session_factory) as session:
-                await session.delete(fw)
-                await session.commit()
+                fresh = await session.get(FailedWebhook, fw_id)
+                if fresh:
+                    await session.delete(fresh)
+                    await session.commit()
         except Exception:
             async with session_scope(async_session_factory) as session:
-                fw.retry_count += 1
-                fw.next_retry_at = now + timedelta(minutes=5 * (2 ** fw.retry_count))
-                await session.commit()
+                fresh = await session.get(FailedWebhook, fw_id)
+                if fresh:
+                    fresh.retry_count += 1
+                    fresh.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=5 * (2 ** fresh.retry_count))
+                    await session.commit()
 
 
 async def handle_inventory_update(payload: dict):
@@ -142,7 +145,7 @@ async def handle_order_create(payload: dict):
     order_date = (
         datetime.fromisoformat(created_at.replace("Z", "+00:00")).date()
         if created_at
-        else datetime.utcnow().date()
+        else datetime.now(timezone.utc).date()
     )
 
     sku_codes = [li.get("sku") for li in line_items if li.get("sku")]

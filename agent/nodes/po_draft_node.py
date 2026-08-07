@@ -61,7 +61,7 @@ async def _generate_reasoning(data: dict) -> str:
     try:
         result = await llm_agent.llm.call(prompt)
         if result and result.text and len(result.text) > 20:
-            await log_llm_call("po_draft", result.text)
+            await log_llm_call("po_draft", result.text, prompt)
             return result.text.strip()
     except Exception:
         pass
@@ -102,7 +102,7 @@ async def po_draft_node(state: dict) -> dict:
                     PurchaseOrder.sku_id.in_(sku_ids),
                     PurchaseOrder.status == POStatus.pending_approval,
                     PurchaseOrder.created_at >= cutoff,
-                )
+                ).with_for_update()
             )
         ).scalars().all()
         existing_sku_ids = set(existing_pos)
@@ -165,9 +165,24 @@ async def po_draft_node(state: dict) -> dict:
         return {**state, "purchase_orders": []}
 
     async with async_session_factory() as session:
+        pending_sku_ids = [p["sku_id"] for p in pending_batch]
+        already_pending = (
+            await session.execute(
+                select(PurchaseOrder.sku_id).where(
+                    PurchaseOrder.sku_id.in_(pending_sku_ids),
+                    PurchaseOrder.status == POStatus.pending_approval,
+                    PurchaseOrder.created_at >= cutoff,
+                )
+            )
+        ).scalars().all()
+        skip_sku_ids = set(already_pending)
+
         thread_id = state.get("thread_id")
-        po_objects = [
-            PurchaseOrder(
+        po_objects = []
+        for p in pending_batch:
+            if p["sku_id"] in skip_sku_ids:
+                continue
+            po_objects.append(PurchaseOrder(
                 sku_id=p["sku_id"],
                 supplier_id=p["supplier_id"],
                 status=POStatus.pending_approval,
@@ -176,13 +191,12 @@ async def po_draft_node(state: dict) -> dict:
                 total_cost=p["total_cost"],
                 thread_id=thread_id,
                 reasoning_text=p["reasoning"],
-            )
-            for p in pending_batch
-        ]
-        session.add_all(po_objects)
-        await session.commit()
-        for po in po_objects:
-            await session.refresh(po)
+            ))
+        if po_objects:
+            session.add_all(po_objects)
+            await session.commit()
+            for po in po_objects:
+                await session.refresh(po)
 
     created_pos = [
         {

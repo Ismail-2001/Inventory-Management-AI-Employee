@@ -1,12 +1,26 @@
-const API_KEY = import.meta.env.VITE_API_KEY || 'demo-key-2024'
 const BASE = '/api/v1'
 
+let _apiKey = ''
+
+async function getApiKey(): Promise<string> {
+  if (_apiKey) return _apiKey
+  try {
+    const res = await fetch(`${BASE}/config`)
+    const cfg = await res.json()
+    _apiKey = cfg.api_key || ''
+  } catch {
+    _apiKey = ''
+  }
+  return _apiKey
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const key = await getApiKey()
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
+      ...(key ? { 'X-API-Key': key } : {}),
       ...options?.headers,
     },
   })
@@ -84,14 +98,12 @@ export const api = {
   triggerOutcomeEval: () => request<{ status: string; evaluated: number }>('/evaluate-outcomes', { method: 'POST' }),
   triggerWeekly: () => request<{ status: string; insights_count: number }>('/run-weekly', { method: 'POST' }),
   getSkus: () => request<SkuSummary[]>('/skus'),
-  approvePO: (poId: number, quantity?: number) =>
-    request<{ status: string; po_id: number }>(`/po/${poId}/approve`, {
-      method: 'POST',
-      body: JSON.stringify({ quantity }),
-    }),
-  rejectPO: (poId: number, reason?: string) =>
-    request<{ status: string; po_id: number }>(`/po/${poId}/reject`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || '' }),
-    }),
+  approvePO: (poId: number, quantity?: number) => {
+    const params = quantity != null ? `?quantity=${quantity}` : ''
+    return request<{ status: string; po_id: number }>(`/po/${poId}/approve${params}`, { method: 'POST' })
+  },
+  rejectPO: (poId: number, reason?: string) => {
+    const params = reason ? `?reason=${encodeURIComponent(reason)}` : ''
+    return request<{ status: string; po_id: number }>(`/po/${poId}/reject${params}`, { method: 'POST' })
+  },
 }

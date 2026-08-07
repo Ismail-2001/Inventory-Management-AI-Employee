@@ -1,0 +1,120 @@
+name: Load Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'API base URL for load testing'
+        required: false
+        default: 'http://localhost:8002'
+
+env:
+  BASE_URL: ${{ github.event.inputs.base_url || 'http://localhost:8002' }}
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'load-test'))
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: inventory
+          POSTGRES_PASSWORD: inventory
+          POSTGRES_DB: inventory_agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent
+        run: alembic upgrade head
+
+      - name: Start API server
+        env:
+          DATABASE_URL: postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent
+          REDIS_URL: redis://localhost:6379/0
+          AGENT_API_KEY: demo-key-2024
+          ENVIRONMENT: development
+        run: |
+          python -m uvicorn api.main:app --host 0.0.0.0 --port 8002 &
+          sleep 5
+          curl -sf http://localhost:8002/health || exit 1
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 -y
+
+      - name: Run load tests
+        run: |
+          k6 run \
+            --out json=load/results.json \
+            --summary-export=load/summary.json \
+            load/load_test.js || true
+
+      - name: Validate thresholds
+        run: |
+          if [ -f load/summary.json ]; then
+            ERROR_RATE=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_failed',{}).get('values',{}).get('rate', 0))")
+            P95=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_duration',{}).get('values',{}).get('p(95)', 0))")
+            echo "Error rate: $ERROR_RATE (threshold: 0.05)"
+            echo "P95 latency: ${P95}ms (threshold: 3000ms)"
+            python3 -c "
+          import sys
+          rate = float('$ERROR_RATE')
+          p95 = float('$P95')
+          failed = False
+          if rate > 0.05:
+              print(f'FAIL: error rate {rate:.3f} > 0.05')
+              failed = True
+          if p95 > 3000:
+              print(f'FAIL: p95 latency {p95:.0f}ms > 3000ms')
+              failed = True
+          if failed:
+              sys.exit(1)
+          print('PASS: all load test thresholds met')
+          "
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: load/
+          retention-days: 30

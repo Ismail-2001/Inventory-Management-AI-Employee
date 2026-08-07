@@ -5,7 +5,6 @@ from agent.models import Sku
 from agent.shopify_sync import sync_products_and_inventory, sync_sales_history
 from agent.telemetry import trace_node
 
-
 from agent.config import settings
 
 

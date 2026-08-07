@@ -17,7 +17,7 @@ from agent.db import async_session_factory
 from agent.models import AuditLog
 
 
-def _s3_sign(method: str, path: str, headers: dict, body: bytes, region: str, bucket: str, access_key: str, secret_key: str) -> str:
+def _s3_sign(method: str, path: str, headers: dict, body: bytes, region: str, bucket: str, access_key: str, secret_key: str) -> tuple[str, dict]:
     """Minimal AWS Signature V4 signing for S3 PUT."""
     service = "s3"
     now = datetime.now(timezone.utc)

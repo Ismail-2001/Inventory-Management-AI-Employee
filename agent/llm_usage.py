@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy import select, func
@@ -6,18 +7,23 @@ from agent.config import settings
 from agent.db import async_session_factory
 from agent.models import LlmUsage
 
+_ACTIVE_MODEL = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+
 
 def _estimate_cost(tokens_in: int | None, tokens_out: int | None) -> float:
-    in_cost = (tokens_in or 0) / 1000 * 0.00015
-    out_cost = (tokens_out or 0) / 1000 * 0.0006
+    from shared.llm_client import MODEL_PRICING
+
+    pricing = MODEL_PRICING.get(_ACTIVE_MODEL, {"input": 0.15, "output": 0.60})
+    in_cost = (tokens_in or 0) / 1000 * pricing["input"]
+    out_cost = (tokens_out or 0) / 1000 * pricing["output"]
     return round(in_cost + out_cost, 6)
 
 
-async def log_llm_call(node_name: str, response: str | None) -> None:
+async def log_llm_call(node_name: str, response: str | None, prompt: str | None = None) -> None:
     if not response:
         return
 
-    token_in = len(response.split()) // 2 + 1
+    token_in = len(prompt.split()) if prompt else len(response.split()) // 2 + 1
     token_out = max(1, len(response.split()))
     estimated_cost = _estimate_cost(token_in, token_out)
 

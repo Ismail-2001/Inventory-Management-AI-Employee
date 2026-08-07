@@ -1,9 +1,11 @@
 import asyncio
-import inspect
+import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from sqlalchemy import event
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.base import (
     ChannelVersions,
@@ -16,14 +18,46 @@ from sqlalchemy.orm import DeclarativeBase
 
 from agent.config import settings
 
+logger = logging.getLogger(__name__)
+
+_checkout_times: dict[int, float] = {}
+_POOL_WARN_THRESHOLD = 0.8
+
+
+def _setup_pool_monitoring(engine):
+    @event.listens_for(engine.sync_engine, "checkout")
+    def on_checkout(dbapi_conn, connection_rec, connection_proxy):
+        _checkout_times[id(dbapi_conn)] = time.perf_counter()
+
+    @event.listens_for(engine.sync_engine, "checkin")
+    def on_checkin(dbapi_conn, connection_rec):
+        checkout_start = _checkout_times.pop(id(dbapi_conn), None)
+        if checkout_start is not None:
+            elapsed_ms = (time.perf_counter() - checkout_start) * 1000
+            if elapsed_ms > 1000:
+                logger.warning("Slow pool checkout: %.0fms (pool_size=%d)", elapsed_ms, engine.pool.size())
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def on_connect(dbapi_conn, connection_rec):
+        pool = engine.pool
+        checked_out = pool.checkedout()
+        total = pool.size() + pool.overflow()
+        if total > 0 and checked_out / total >= _POOL_WARN_THRESHOLD:
+            logger.warning(
+                "Connection pool near exhaustion: %d/%d checked out (pool_size=%d, overflow=%d)",
+                checked_out, total, pool.size(), pool.overflow(),
+            )
+
 
 engine = create_async_engine(settings.database_url, echo=False, pool_size=5, max_overflow=10, pool_recycle=3600, pool_pre_ping=True)
+_setup_pool_monitoring(engine)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 _read_engine = None
 async_session_factory_readonly = None
 if settings.database_read_url:
     _read_engine = create_async_engine(settings.database_read_url, echo=False, pool_size=10, max_overflow=20, pool_recycle=3600, pool_pre_ping=True)
+    _setup_pool_monitoring(_read_engine)
     async_session_factory_readonly = async_sessionmaker(_read_engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -31,8 +65,6 @@ if settings.database_read_url:
 async def session_scope(factory=None):
     factory = factory or async_session_factory
     session = factory()
-    if inspect.isawaitable(session):
-        session = await session
     async with session as session_obj:
         yield session_obj
 

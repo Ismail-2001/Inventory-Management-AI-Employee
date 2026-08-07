@@ -32,7 +32,8 @@ async def evaluate_pending_outcomes():
             if not sku:
                 continue
 
-            expected_delivery = po.approved_at + timedelta(days=7)
+            lead_time_days = getattr(sku, 'lead_time_days', None) or 7
+            expected_delivery = po.approved_at + timedelta(days=lead_time_days)
             if expected_delivery > datetime.now(timezone.utc):
                 continue
 

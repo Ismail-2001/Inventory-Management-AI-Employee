@@ -3,6 +3,11 @@ from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 from agent import llm_usage as llm_module
+from shared.llm_client import MODEL_PRICING
+
+
+def _get_model_rates():
+    return MODEL_PRICING.get(llm_module._ACTIVE_MODEL, {"input": 0.15, "output": 0.60})
 
 
 def test_estimate_cost_zero():
@@ -10,18 +15,21 @@ def test_estimate_cost_zero():
 
 
 def test_estimate_cost_input_only():
+    rates = _get_model_rates()
     result = llm_module._estimate_cost(1000, 0)
-    assert result == pytest.approx(0.00015, abs=1e-6)
+    assert result == pytest.approx(rates["input"], abs=1e-6)
 
 
 def test_estimate_cost_output_only():
+    rates = _get_model_rates()
     result = llm_module._estimate_cost(0, 1000)
-    assert result == pytest.approx(0.0006, abs=1e-6)
+    assert result == pytest.approx(rates["output"], abs=1e-6)
 
 
 def test_estimate_cost_both():
+    rates = _get_model_rates()
     result = llm_module._estimate_cost(1000, 1000)
-    assert result == pytest.approx(0.00075, abs=1e-6)
+    assert result == pytest.approx(rates["input"] + rates["output"], abs=1e-6)
 
 
 def test_estimate_cost_none_defaults():

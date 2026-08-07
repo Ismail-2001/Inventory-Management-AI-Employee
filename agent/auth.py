@@ -13,7 +13,19 @@ def _hexdigest(key: str) -> str:
     return bcrypt.hash(key)
 
 
-async def verify_api_key(request: Request, x_api_key: str = Header(None)) -> Merchant:
+async def verify_api_key(request: Request, x_api_key: str = Header(None), x_session_token: str = Header(None)) -> Merchant:
+    if x_session_token and isinstance(x_session_token, str):
+        from agent.sso import get_sso_session
+        sso = get_sso_session()
+        session_data = sso.verify_token(x_session_token)
+        if session_data:
+            async with session_scope(async_session_factory) as session:
+                merchant = await session.get(Merchant, session_data["merchant_id"])
+                if merchant:
+                    request.state.merchant_tier = merchant.tier or "developer"
+                    request.state.sso_user = session_data
+                    return merchant
+
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
@@ -45,7 +57,7 @@ async def verify_api_key(request: Request, x_api_key: str = Header(None)) -> Mer
 
 async def get_current_user(merchant: Merchant = Depends(verify_api_key)) -> User | None:
     if merchant.id == 0:
-        return User(id=0, merchant_id=0, email="demo@example.com", role="owner")
+        return User(id=0, merchant_id=0, email="demo@example.com", role="viewer")
     async with session_scope(async_session_factory) as session:
         result = await session.execute(
             select(User).where(User.merchant_id == merchant.id).limit(1)

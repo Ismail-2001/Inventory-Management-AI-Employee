@@ -38,7 +38,7 @@ def _mock_request():
 
 @pytest.mark.asyncio
 async def test_verify_api_key_rejects_invalid_key(monkeypatch):
-    async def fake_session_factory():
+    def fake_session_factory():
         return FakeSession([])
 
     monkeypatch.setattr(auth_module, "async_session_factory", fake_session_factory)
@@ -54,7 +54,7 @@ async def test_demo_key_rejected_when_demo_disabled(monkeypatch):
     monkeypatch.setattr(auth_module.settings, "allow_demo_key", False)
     monkeypatch.setattr(auth_module.settings, "agent_api_key", "demo-key-2024")
 
-    async def fake_session_factory():
+    def fake_session_factory():
         return FakeSession([])
 
     monkeypatch.setattr(auth_module, "async_session_factory", fake_session_factory)
