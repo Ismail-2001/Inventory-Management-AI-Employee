@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -78,9 +78,8 @@ class SalesHistory(Base):
     sku: Mapped["Sku"] = relationship(back_populates="sales_records")
 
     __table_args__ = (
-        {
-            "sqlite_autoincrement": True,
-        },
+        Index("ix_sales_sku_date", "sku_id", "date"),
+        {"sqlite_autoincrement": True},
     )
 
 
@@ -96,6 +95,10 @@ class Forecast(Base):
 
     sku: Mapped["Sku"] = relationship(back_populates="forecasts")
 
+    __table_args__ = (
+        Index("ix_forecast_sku_created", "sku_id", "created_at"),
+    )
+
 
 class RiskAlert(Base):
     __tablename__ = "risk_alerts"
@@ -108,6 +111,10 @@ class RiskAlert(Base):
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
 
     sku: Mapped["Sku"] = relationship(back_populates="alerts")
+
+    __table_args__ = (
+        Index("ix_risk_sku_resolved", "sku_id", "resolved"),
+    )
 
 
 class Supplier(Base):
@@ -147,6 +154,11 @@ class PurchaseOrder(Base):
     sku: Mapped["Sku"] = relationship()
     supplier: Mapped[Optional["Supplier"]] = relationship()
 
+    __table_args__ = (
+        Index("ix_po_merchant_status", "merchant_id", "status"),
+        Index("ix_po_merchant_created", "merchant_id", "created_at"),
+    )
+
 
 class POOutcome(Base):
     __tablename__ = "po_outcomes"
@@ -180,6 +192,10 @@ class LlmUsage(Base):
     estimated_cost: Mapped[Optional[float]] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        Index("ix_llm_usage_created", "created_at"),
+    )
+
 
 class IdempotencyKey(Base):
     __tablename__ = "idempotency_keys"
@@ -196,6 +212,10 @@ class WebhookEvent(Base):
     event_id: Mapped[str] = mapped_column(String(256), primary_key=True)
     event_type: Mapped[Optional[str]] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_webhook_event_type", "event_type"),
+    )
 
 
 class User(Base):
@@ -234,3 +254,7 @@ class AuditLog(Base):
     target_id: Mapped[Optional[str]] = mapped_column(String(64))
     details: Mapped[Optional[dict]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_audit_merchant_created", "merchant_id", "created_at"),
+    )

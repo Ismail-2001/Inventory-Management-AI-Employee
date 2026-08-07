@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 
 from agent.auth import verify_api_key, require_role
 from agent.audit import log_audit_event
-from api.rate_limit import limiter
+from api.rate_limit import limiter, _get_tier_limit
 from agent.db import async_session_factory, session_scope
 from agent.models import IdempotencyKey, POStatus, PurchaseOrder
 from agent.signing import sign_token, verify_token
@@ -188,7 +188,7 @@ async def _reject_po_impl(request: Request, po_id: int, reason: str, merchant_id
 
 
 @router.post("/api/v1/po/{po_id}/approve")
-@limiter.limit("5/minute")
+@limiter.limit(_get_tier_limit)
 async def approve_po(
     request: Request,
     po_id: int,
@@ -206,7 +206,7 @@ async def approve_po(
 
 
 @router.post("/api/v1/po/{po_id}/reject")
-@limiter.limit("5/minute")
+@limiter.limit(_get_tier_limit)
 async def reject_po(
     request: Request,
     po_id: int,
@@ -223,7 +223,7 @@ async def reject_po(
 
 
 @router.post("/api/v1/po/action")
-@limiter.limit("5/minute")
+@limiter.limit(_get_tier_limit)
 async def po_action_via_token(
     request: Request,
     token: str = Query(...),

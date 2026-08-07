@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from agent.auth import verify_api_key
-from api.rate_limit import limiter
+from api.rate_limit import limiter, _get_tier_limit
 from agent.db import async_session_factory, async_session_factory_readonly
 from agent.metrics import calculate_acceptance_rate, calculate_forecast_error_summary
 from agent.models import Sku
@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/api/v1/skus")
-@limiter.limit("30/minute")
+@limiter.limit(_get_tier_limit)
 async def list_skus(request: Request, merchant=Depends(verify_api_key)):
     factory = async_session_factory_readonly or async_session_factory
     async with factory() as session:
@@ -41,14 +41,14 @@ async def list_skus(request: Request, merchant=Depends(verify_api_key)):
 
 
 @router.post("/api/v1/evaluate-outcomes")
-@limiter.limit("5/hour")
+@limiter.limit(_get_tier_limit)
 async def trigger_outcome_evaluation(request: Request, merchant=Depends(verify_api_key)):
     count = await evaluate_pending_outcomes()
     return {"status": "ok", "evaluated": count}
 
 
 @router.post("/api/v1/run-weekly")
-@limiter.limit("1/hour")
+@limiter.limit(_get_tier_limit)
 async def trigger_weekly(
     request: Request,
     week_start: str | None = None,
@@ -61,7 +61,7 @@ async def trigger_weekly(
 
 
 @router.get("/api/v1/metrics")
-@limiter.limit("30/minute")
+@limiter.limit(_get_tier_limit)
 async def get_metrics(
     request: Request,
     days: int = Query(default=30, ge=1, le=365),

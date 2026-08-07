@@ -6,6 +6,8 @@ Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 import os
 import uuid
 import time
+import asyncio
+import signal
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -29,7 +31,7 @@ from agent.telemetry import setup_telemetry
 setup_telemetry()
 
 from opentelemetry import trace
-from api.rate_limit import limiter
+from api.rate_limit import limiter, _get_tier_limit, add_rate_limit_headers
 from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
 from api.routes.operations import router as ops_router
 from api.routes.purchase_orders import router as po_router
@@ -73,7 +75,38 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    _shutdown_event = asyncio.Event()
+    _inflight = {"count": 0}
+    _original_handler = signal.getsignal(signal.SIGTERM)
+
+    async def _graceful_shutdown():
+        logger.info("Graceful shutdown initiated — draining in-flight requests")
+        _shutdown_event.set()
+
+    loop = asyncio.get_running_loop()
+
+    def _signal_handler():
+        loop.create_task(_graceful_shutdown())
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, _signal_handler)
+        except NotImplementedError:
+            pass
+
     yield
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.remove_signal_handler(sig)
+        except (NotImplementedError, ValueError):
+            pass
+
+    drain_timeout = 10.0
+    start_time = time.monotonic()
+    while _inflight["count"] > 0 and (time.monotonic() - start_time) < drain_timeout:
+        logger.info("Waiting for %d in-flight request(s) to complete", _inflight["count"])
+        await asyncio.sleep(0.2)
 
     await task_queue.stop()
     await close_checkpointer(getattr(app.state, "checkpointer", None))
@@ -82,6 +115,14 @@ async def lifespan(app: FastAPI):
         await close_redis()
     except Exception:
         pass
+
+    try:
+        from agent.db import engine
+        await engine.dispose()
+    except Exception:
+        pass
+
+    logger.info("Graceful shutdown complete")
 
 
 app = FastAPI(
@@ -357,13 +398,48 @@ class CorrelationIdMiddleware:
 
 app.add_middleware(CorrelationIdMiddleware)
 
+
+class InflightTracker:
+    def __init__(self):
+        self.count = 0
+        self._lock = asyncio.Lock()
+
+    async def increment(self):
+        async with self._lock:
+            self.count += 1
+
+    async def decrement(self):
+        async with self._lock:
+            self.count = max(0, self.count - 1)
+
+
+inflight_tracker = InflightTracker()
+
+
+class InflightMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        await inflight_tracker.increment()
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            await inflight_tracker.decrement()
+
+app.add_middleware(InflightMiddleware)
+
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
 @app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
-@limiter.limit("5/minute")
+@limiter.limit(_get_tier_limit)
 async def analyze_inventory(
     request: Request,
     item: InventoryItem,
@@ -396,7 +472,7 @@ async def analyze_inventory(
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
-@limiter.limit("3/minute")
+@limiter.limit(_get_tier_limit)
 async def analyze_bulk(
     request: Request,
     request_body: BulkAnalysisRequest,
@@ -411,7 +487,7 @@ async def analyze_bulk(
 
 
 @app.post("/api/v1/forecast", deprecated=True)
-@limiter.limit("5/minute")
+@limiter.limit(_get_tier_limit)
 async def forecast_demand(
     request: Request,
     item: InventoryItem,
