@@ -1,3 +1,5 @@
+import hmac as hmac_mod
+
 from fastapi import Depends, HTTPException, Header, Request
 from passlib.hash import bcrypt
 from sqlalchemy import select
@@ -15,7 +17,7 @@ async def verify_api_key(request: Request, x_api_key: str = Header(None)) -> Mer
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    if settings.allow_demo_key and x_api_key == settings.agent_api_key:
+    if settings.allow_demo_key and hmac_mod.compare_digest(x_api_key, settings.agent_api_key):
         merchant = Merchant(
             id=0,
             name="Demo Merchant",

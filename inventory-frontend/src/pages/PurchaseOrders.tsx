@@ -19,11 +19,8 @@ export default function PurchaseOrders() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/v1/po', { headers: { 'X-API-Key': 'demo-key-2024' } })
-      if (res.ok) {
-        const data = await res.json()
-        setOrders(Array.isArray(data) ? data : [])
-      }
+      const data = await api.get<PurchaseOrder[]>('/api/v1/po')
+      setOrders(Array.isArray(data) ? data : [])
     } catch { }
   }
 

@@ -12,21 +12,44 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run Ruff
-        run: python -m ruff check . --target-version py312
+          pip install -r requirements-dev.txt
+      - name: Ruff lint
+        run: ruff check . --target-version py312
+      - name: Ruff format check
+        run: ruff format --check .
 
-  backend-tests:
+  unit-tests:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run unit tests
+        run: pytest tests/ -v --ignore=tests/test_integration.py --ignore=tests/eval_suite.py
+
+  integration-tests:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -43,46 +66,67 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent
+      CHECKPOINTER_DATABASE_URL: postgresql://inventory:inventory@localhost:5432/inventory_agent
       ENVIRONMENT: testing
-      ALLOW_DEMO_KEY: true
+      ALLOW_DEMO_KEY: 'true'
       AGENT_API_KEY: demo-key-2024
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Run Alembic migrations
         run: alembic upgrade head
-      - name: Run pytest
-        run: pytest tests/ -v
+      - name: Schema drift check
+        run: alembic check || (echo "Schema drift detected — run 'alembic revision --autogenerate' and commit the migration" && exit 1)
+      - name: Run integration tests
+        run: pytest tests/test_integration.py -v
       - name: Run eval suite
-        run: python -m pytest tests/eval_suite.py -v
+        run: pytest tests/eval_suite.py -v
+
+  eval-suite:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run eval suite
+        run: pytest tests/eval_suite.py -v
 
   frontend-build:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: inventory-frontend/package-lock.json
       - name: Install frontend dependencies
-        run: |
-          cd inventory-frontend
-          npm ci
+        run: cd inventory-frontend && npm ci
       - name: Build frontend
-        run: |
-          cd inventory-frontend
-          npm run build
+        run: cd inventory-frontend && npm run build
 
   docker-build:
-    needs: [backend-tests, frontend-build]
+    needs: [unit-tests, integration-tests, eval-suite, frontend-build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write

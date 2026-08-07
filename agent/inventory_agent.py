@@ -170,15 +170,17 @@ Provide your analysis as JSON.
 """
         try:
             result = await self.llm.call(context)
-            data = json.loads(result.text) if result.text else {}
+            if not result.text:
+                raise RuntimeError("Empty LLM response")
+            data = json.loads(result.text)
 
             return InventoryAnalysis(
                 product_id=item.product_id,
                 product_name=item.name,
                 current_stock=item.current_stock,
-                recommended_action=data.get("recommended_action", "maintain"),
+                recommended_action=data.get("recommended_action", "maintain").lower(),
                 reorder_quantity=data.get("reorder_quantity", 0),
-                urgency=data.get("urgency", "low"),
+                urgency=data.get("urgency", "low").lower(),
                 days_of_stock_remaining=round(days_of_stock, 1),
                 stockout_risk_days=data.get("stockout_risk_days", int(days_of_stock * 0.7)),
                 demand_forecast_30d=data.get("demand_forecast_30d", int(item.daily_sales * 30)),
@@ -243,7 +245,9 @@ Provide:
 """
         try:
             result = await self.llm.call(context)
-            return json.loads(result.text) if result.text else {}
+            if not result.text:
+                raise RuntimeError("Empty LLM response")
+            return json.loads(result.text)
         except Exception:
             return {
                 "next_30_days": int(item.daily_sales * 30),

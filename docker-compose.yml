@@ -6,8 +6,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://inventory:inventory@postgres:5432/inventory_agent
-      CHECKPOINTER_DATABASE_URL: postgresql://inventory:inventory@postgres:5432/inventory_agent
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory}@postgres:5432/${POSTGRES_DB:-inventory_agent}
+      CHECKPOINTER_DATABASE_URL: postgresql://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory}@postgres:5432/${POSTGRES_DB:-inventory_agent}
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,13 +17,23 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: inventory
-      POSTGRES_PASSWORD: inventory
-      POSTGRES_DB: inventory_agent
+      POSTGRES_USER: ${POSTGRES_USER:-inventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inventory}
+      POSTGRES_DB: ${POSTGRES_DB:-inventory_agent}
     ports:
       - "5432:5432"
     volumes:
@@ -33,6 +43,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
 volumes:
   pgdata:

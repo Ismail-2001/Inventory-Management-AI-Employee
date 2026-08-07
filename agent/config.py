@@ -23,17 +23,13 @@ class Settings:
     )
 
     database_url: str = field(
-        default_factory=lambda: os.getenv(
-            "DATABASE_URL",
-            "postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent",
-        )
+        default_factory=lambda: os.getenv("DATABASE_URL", "")
     )
 
     checkpointer_database_url: str = field(
         default_factory=lambda: os.getenv(
             "CHECKPOINTER_DATABASE_URL",
-            os.getenv("DATABASE_URL", "postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent")
-            .replace("+asyncpg", ""),
+            os.getenv("DATABASE_URL", "").replace("+asyncpg", ""),
         )
     )
 
@@ -130,6 +126,8 @@ class Settings:
                 missing.append("PUBLIC_API_URL")
             if not os.getenv("CHECKPOINTER_DATABASE_URL") or self.checkpointer_database_url == self.database_url.replace("+asyncpg", ""):
                 missing.append("CHECKPOINTER_DATABASE_URL (must be separate from DATABASE_URL in production)")
+            if self.agent_api_key == "demo-key-2024":
+                missing.append("AGENT_API_KEY (must not be the default demo key)")
         if not self.database_url:
             missing.append("DATABASE_URL")
         if missing:

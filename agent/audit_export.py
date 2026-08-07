@@ -6,7 +6,7 @@ S3 API via REST: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-str
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -57,7 +57,7 @@ async def export_audit_logs_to_s3() -> int:
     if not settings.audit_s3_bucket or not settings.audit_s3_access_key:
         return 0
 
-    cutoff = datetime.now(timezone.utc)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     async with async_session_factory() as session:
         result = await session.execute(
             select(AuditLog).where(AuditLog.created_at >= cutoff)

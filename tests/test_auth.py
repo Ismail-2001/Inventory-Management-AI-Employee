@@ -32,6 +32,10 @@ class FakeSession:
         return FakeResult(self._merchants)
 
 
+def _mock_request():
+    return SimpleNamespace(state=SimpleNamespace())
+
+
 @pytest.mark.asyncio
 async def test_verify_api_key_rejects_invalid_key(monkeypatch):
     async def fake_session_factory():
@@ -40,7 +44,7 @@ async def test_verify_api_key_rejects_invalid_key(monkeypatch):
     monkeypatch.setattr(auth_module, "async_session_factory", fake_session_factory)
 
     with pytest.raises(HTTPException) as exc:
-        await verify_api_key("wrong-key")
+        await verify_api_key(_mock_request(), "wrong-key")
 
     assert exc.value.status_code == 401
 
@@ -56,7 +60,7 @@ async def test_demo_key_rejected_when_demo_disabled(monkeypatch):
     monkeypatch.setattr(auth_module, "async_session_factory", fake_session_factory)
 
     with pytest.raises(HTTPException) as exc:
-        await verify_api_key("demo-key-2024")
+        await verify_api_key(_mock_request(), "demo-key-2024")
 
     assert exc.value.status_code == 401
 

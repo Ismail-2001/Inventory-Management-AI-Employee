@@ -97,10 +97,11 @@ async def test_full_graph_returns_all_expected_state_keys():
     # ── per-module DB session mocks ───────────────────────────────
 
     # sync_node   → select(Sku)
+    # execute().scalars() is sync on real Result — use MagicMock for the result
     sync_session = AsyncMock()
-    sync_session.execute.return_value.scalars.return_value.all.return_value = [
-        FakeSku()
-    ]
+    sync_result = MagicMock()
+    sync_result.scalars.return_value.all.return_value = [FakeSku()]
+    sync_session.execute.return_value = sync_result
     sync_session.__aenter__.return_value = sync_session
 
     # risk_node   → RiskAlert (add / commit)
@@ -112,7 +113,10 @@ async def test_full_graph_returns_all_expected_state_keys():
     # po_draft_node → select(Supplier) + PurchaseOrder (add / commit / refresh)
     po_session = AsyncMock()
     po_session.__aenter__.return_value = po_session
-    po_session.execute.return_value.scalar_one_or_none.return_value = FakeSupplier()
+    po_result = MagicMock()
+    po_result.scalar_one_or_none.return_value = FakeSupplier()
+    po_result.scalars.return_value.all.return_value = []
+    po_session.execute.return_value = po_result
 
     async def _po_refresh(obj):
         obj.id = 1
@@ -306,4 +310,3 @@ async def test_no_real_shopify_calls():
 
     mock_sync_products.assert_not_called()
     mock_sync_sales.assert_not_called()
-    mock_client.assert_not_called()

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 
+from api.rate_limit import limiter
 from agent.webhooks import (
     handle_inventory_update,
     handle_order_create,
@@ -11,15 +12,18 @@ router = APIRouter()
 
 
 @router.post("/api/v1/webhooks/inventory_levels_update")
+@limiter.limit("60/minute")
 async def webhook_inventory_update(request: Request):
     return await handle_webhook_event(request, "inventory_levels_update", handle_inventory_update)
 
 
 @router.post("/api/v1/webhooks/orders_create")
+@limiter.limit("60/minute")
 async def webhook_order_create(request: Request):
     return await handle_webhook_event(request, "orders_create", handle_order_create)
 
 
 @router.post("/api/v1/webhooks/products_update")
+@limiter.limit("60/minute")
 async def webhook_product_update(request: Request):
     return await handle_webhook_event(request, "products_update", handle_product_update)

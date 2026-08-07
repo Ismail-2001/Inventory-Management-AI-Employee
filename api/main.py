@@ -4,6 +4,7 @@ Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 """
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -48,12 +49,30 @@ def _get_provider() -> str:
     return "mock"
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings.validate_required()
+
+    app.state.checkpointer = create_checkpointer()
+    app.state.graph = build_graph().compile(checkpointer=app.state.checkpointer, interrupt_after=["notify_pending"])
+
+    task_queue.start(app)
+    from agent.scheduler import start
+    start()
+
+    yield
+
+    await task_queue.stop()
+    await close_checkpointer(getattr(app.state, "checkpointer", None))
+
+
 app = FastAPI(
     title="Inventory Agent",
     description="AI-powered inventory management, demand forecasting, and reorder optimization",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -63,6 +82,7 @@ from passlib.hash import bcrypt
 from agent.models import Merchant, MerchantTier
 
 _tier_cache: dict[str, MerchantTier] = {}
+_TIER_CACHE_MAX = 200
 
 class TierLookupMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -83,6 +103,8 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                         merchant = result.scalar_one_or_none()
                         if merchant:
                             tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                            if len(_tier_cache) >= _TIER_CACHE_MAX:
+                                _tier_cache.clear()
                             _tier_cache[prefix] = tier
                             request.state.merchant_tier = tier
                 except Exception:
@@ -94,6 +116,8 @@ app.add_middleware(TierLookupMiddleware)
 
 @app.post("/api/v1/dev-webhook")
 async def dev_webhook(request: Request):
+    if settings.environment == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     body = await request.json()
     _dev_notifications.append({"text": body.get("text", "")})
     if len(_dev_notifications) > 50:
@@ -103,12 +127,14 @@ async def dev_webhook(request: Request):
 
 @app.get("/api/v1/dev-webhook")
 async def dev_webhook_log():
+    if settings.environment == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     return _dev_notifications
 
 
 @app.get("/health")
 async def health(request: Request):
-    return {
+    result = {
         "status": "healthy",
         "agent": "inventory",
         "version": "1.0.0",
@@ -116,6 +142,16 @@ async def health(request: Request):
         "provider": _get_provider(),
         "model": settings.model_name,
     }
+    try:
+        from agent.db import engine
+        async with engine.connect() as conn:
+            from sqlalchemy import text
+            await conn.execute(text("SELECT 1"))
+        result["database"] = "ok"
+    except Exception:
+        result["status"] = "degraded"
+        result["database"] = "error"
+    return result
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -144,7 +180,6 @@ app.add_middleware(
 from agent.telemetry import RequestTracingMiddleware
 app.add_middleware(RequestTracingMiddleware)
 
-from starlette.middleware.base import BaseHTTPMiddleware
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, max_bytes: int = 1_048_576):
@@ -252,24 +287,6 @@ async def forecast_demand(
         return result
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.on_event("startup")
-async def startup():
-    settings.validate_required()
-
-    app.state.checkpointer = create_checkpointer()
-    app.state.graph = build_graph().compile(checkpointer=app.state.checkpointer, interrupt_after=["notify_pending"])
-
-    task_queue.start(app)
-    from agent.scheduler import start
-    start()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await task_queue.stop()
-    await close_checkpointer(getattr(app.state, "checkpointer", None))
 
 
 if __name__ == "__main__":

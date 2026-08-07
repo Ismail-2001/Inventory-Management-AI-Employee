@@ -13,6 +13,7 @@ from agent.signing import sign_token, verify_token
 
 router = APIRouter()
 _idempotency_cache: dict[str, dict] = {}
+_IDEMPOTENCY_CACHE_MAX = 500
 
 
 async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
@@ -78,6 +79,9 @@ async def _run_with_idempotency(key: str | None, endpoint: str, action):
     response_payload = await action()
 
     if key:
+        if len(_idempotency_cache) >= _IDEMPOTENCY_CACHE_MAX:
+            oldest = next(iter(_idempotency_cache))
+            del _idempotency_cache[oldest]
         _idempotency_cache[key] = response_payload
         async with session_scope(async_session_factory) as session:
             session.add(IdempotencyKey(key=key, endpoint=endpoint, response_json=response_payload))
@@ -181,12 +185,13 @@ async def reject_po(
     )
 
 
-@router.get("/api/v1/po/action")
+@router.post("/api/v1/po/action")
+@limiter.limit("5/minute")
 async def po_action_via_token(
+    request: Request,
     token: str = Query(...),
     reason: str = Query(default=""),
-    quantity: int | None = Query(default=None),
-    request: Request = Depends(),
+    quantity: int | None = Query(default=None, ge=1),
 ):
     payload = verify_token(token)
     if not payload:

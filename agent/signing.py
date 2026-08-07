@@ -7,7 +7,14 @@ from agent.config import settings
 
 
 def _secret() -> str:
-    return settings.agent_api_key or "default-signing-secret-change-me"
+    if not settings.agent_api_key:
+        if settings.environment == "production":
+            raise RuntimeError(
+                "AGENT_API_KEY must be set in production. "
+                "PO approval tokens cannot be signed without a secret."
+            )
+        return "default-signing-secret-change-me"
+    return settings.agent_api_key
 
 
 def sign_token(po_id: int, action: str, ttl_seconds: int = 172800) -> str:

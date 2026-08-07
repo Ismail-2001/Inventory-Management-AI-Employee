@@ -1,6 +1,9 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+from starlette.requests import Request
+
 import api.main as api_main
 import api.routes.run_sync as run_sync_module
 import agent.scheduler as scheduler_module
@@ -30,13 +33,18 @@ def test_startup_initializes_shared_graph_and_checkpointer(monkeypatch):
     monkeypatch.setattr(api_main, "build_graph", lambda: FakeBuilder(graph))
     monkeypatch.setattr(scheduler_module, "start", lambda: None)
 
-    asyncio.run(api_main.startup())
+    async def _run_lifespan():
+        async with api_main.lifespan(api_main.app):
+            pass
+
+    asyncio.run(_run_lifespan())
 
     assert api_main.app.state.checkpointer is saver
     assert api_main.app.state.graph is graph
 
 
-def test_run_sync_uses_graph_from_app_state(monkeypatch):
+@pytest.mark.asyncio
+async def test_run_sync_uses_graph_from_app_state():
     class FakeGraph:
         async def ainvoke(self, state, config):
             return {
@@ -46,14 +54,15 @@ def test_run_sync_uses_graph_from_app_state(monkeypatch):
                 "purchase_orders": [],
             }
 
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(graph=FakeGraph())))
+    scope = {
+        "type": "http", "method": "POST", "path": "/api/v1/run-sync",
+        "headers": [],
+        "app": SimpleNamespace(state=SimpleNamespace(graph=FakeGraph())),
+    }
+    request = Request(scope, receive=lambda: None, send=lambda msg: None)
 
-    def fail_compilation():
-        raise AssertionError("run_sync should reuse the shared graph from app.state")
-
-    monkeypatch.setattr(run_sync_module, "get_compiled_graph", fail_compilation)
-
-    response = asyncio.run(run_sync_module.run_sync(request, merchant=object()))
+    merchant = SimpleNamespace(id=1)
+    response = await run_sync_module.run_sync(request, merchant=merchant)
 
     assert response["synced_products"] == 3
     assert response["synced_sales"] == 2

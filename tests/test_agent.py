@@ -4,6 +4,7 @@ Run: pytest tests/ -v
 """
 
 import pytest
+from unittest.mock import patch
 from agent.inventory_agent import InventoryAgent, InventoryItem, Config
 
 
@@ -94,15 +95,17 @@ async def test_analyze_critical(agent, critical_item):
 
 @pytest.mark.asyncio
 async def test_analyze_overstocked(agent, overstocked_item):
-    result = await agent.analyze(overstocked_item)
+    with patch.object(agent.llm, "call", side_effect=RuntimeError("no LLM")):
+        result = await agent.analyze(overstocked_item)
     assert result.product_id == "SKU-003"
     assert result.recommended_action in ["clearance", "discontinue"]
 
 
 @pytest.mark.asyncio
 async def test_bulk_analysis(agent, sample_item, critical_item):
-    items = [sample_item, critical_item]
-    result = await agent.analyze_bulk(items)
+    with patch.object(agent.llm, "call", side_effect=RuntimeError("no LLM")):
+        items = [sample_item, critical_item]
+        result = await agent.analyze_bulk(items)
     assert len(result.results) == 2
     assert result.summary["total_items"] == 2
     assert result.summary["critical_items"] >= 1
@@ -110,7 +113,8 @@ async def test_bulk_analysis(agent, sample_item, critical_item):
 
 @pytest.mark.asyncio
 async def test_forecast(agent, sample_item):
-    result = await agent.forecast_demand(sample_item)
+    with patch.object(agent.llm, "call", side_effect=RuntimeError("no LLM")):
+        result = await agent.forecast_demand(sample_item)
     assert "next_30_days" in result
     assert "next_60_days" in result
     assert "next_90_days" in result

@@ -39,10 +39,9 @@ services:
           echo "[backup] Next backup in $$INTERVAL_SECONDS seconds"
           sleep "$${INTERVAL_SECONDS}"
         done
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: inventory
-      POSTGRES_PASSWORD: inventory
-      POSTGRES_DB: inventory_agent
       PGHOST: postgres
       INTERVAL_SECONDS: ${BACKUP_INTERVAL:-86400}
       RETENTION_DAYS: ${BACKUP_RETENTION:-30}

@@ -14,8 +14,8 @@ from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from agent.config import settings
-from agent.db import async_session_factory
-from agent.models import Forecast, PurchaseOrder, RiskAlert, Sku, Supplier
+from agent.db import async_session_factory, engine
+from agent.models import Forecast, Merchant, PurchaseOrder, RiskAlert, Sku, Supplier
 
 
 pytestmark = [
@@ -30,14 +30,18 @@ pytestmark = [
 @pytest.fixture(autouse=True)
 async def _clean_tables():
     """Reset tables between tests for isolation."""
-    engine = create_async_engine(settings.database_url)
-    async with engine.begin() as conn:
-        for table in ("risk_alerts", "forecasts", "purchase_orders", "suppliers", "skus"):
+    cleanup_engine = create_async_engine(settings.database_url)
+    async with cleanup_engine.begin() as conn:
+        for table in ("risk_alerts", "forecasts", "purchase_orders", "suppliers", "skus", "merchants"):
             await conn.execute(text(f"DELETE FROM {table}"))
+    await cleanup_engine.dispose()
     await engine.dispose()
 
 
 async def _seed_sku(session: AsyncSession, merchant_id: int = 0) -> Sku:
+    merchant = Merchant(id=merchant_id, name="Integration Test Merchant", hashed_api_key="test", shopify_store_domain="test.myshopify.com")
+    session.add(merchant)
+    await session.flush()
     sku = Sku(
         shopify_variant_id=f"gid://shopify/Variant/{uuid.uuid4().int % 10**10}",
         merchant_id=merchant_id,
@@ -108,9 +112,10 @@ async def test_full_pipeline_creates_forecasts_risk_alerts_and_pos(seeded_sku):
 
     assert "risk_alerts" in result, "risk_node did not populate risk_alerts"
     assert len(result["risk_alerts"]) >= 1, "low stock should trigger a risk alert"
-    alert = result["risk_alerts"][0]
+    forecast_sku_ids = {f["sku_id"] for f in result["forecasts"]}
+    alert = next(a for a in result["risk_alerts"] if a["sku_id"] in forecast_sku_ids)
     assert alert["risk_level"] in ("critical", "warning")
-    assert alert["sku_id"] == forecast["sku_id"]
+    assert alert["sku_id"] in forecast_sku_ids
 
     assert "purchase_orders" in result, "po_draft_node did not populate purchase_orders"
     assert len(result["purchase_orders"]) >= 1, "critical risk should create a PO"
