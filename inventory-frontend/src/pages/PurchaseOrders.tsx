@@ -19,7 +19,7 @@ export default function PurchaseOrders() {
 
   const fetchOrders = async () => {
     try {
-      const data = await api.get<PurchaseOrder[]>('/api/v1/po')
+      const data = await api.get<PurchaseOrder[]>('/po')
       setOrders(Array.isArray(data) ? data : [])
     } catch { }
   }

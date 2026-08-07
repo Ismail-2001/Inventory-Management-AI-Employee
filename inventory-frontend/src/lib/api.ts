@@ -78,6 +78,7 @@ export interface MetricsResponse {
 }
 
 export const api = {
+  get: <T>(path: string) => request<T>(path),
   runSync: () => request<RunSyncResponse>('/run-sync', { method: 'POST' }),
   getMetrics: (days = 30) => request<MetricsResponse>(`/metrics?days=${days}`),
   triggerOutcomeEval: () => request<{ status: string; evaluated: number }>('/evaluate-outcomes', { method: 'POST' }),
