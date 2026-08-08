@@ -37,6 +37,7 @@ limiter = Limiter(
     key_func=_get_rate_limit_key,
     default_limits=["20/minute"],
     storage_uri=storage_uri,
+    in_memory_fallback_enabled=True,
 )
 
 

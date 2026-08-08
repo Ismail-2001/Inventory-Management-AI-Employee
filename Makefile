@@ -1,4 +1,4 @@
-.PHONY: dev build test migrate docker-up docker-down clean
+.PHONY: dev build test migrate docker-up docker-down clean chaos
 
 dev:
 	uvicorn api.main:app --reload --port 8002
@@ -8,6 +8,15 @@ build:
 
 test:
 	python -m pytest tests/ -v
+
+chaos:
+	python chaos/chaos_runner.py --all
+
+chaos-redis:
+	python chaos/chaos_runner.py --scenario redis
+
+chaos-postgres:
+	python chaos/chaos_runner.py --scenario postgres
 
 migrate:
 	alembic upgrade head
