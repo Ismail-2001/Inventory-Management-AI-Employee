@@ -17,8 +17,11 @@ test.describe('Inventory page', () => {
 
   test('shows empty state or SKU data', async ({ page }) => {
     await page.goto('/inventory')
-    const emptyState = page.getByText('No SKUs found — run a sync first.')
-    const skuRows = page.locator('tbody tr')
-    await expect(emptyState.or(skuRows.first())).toBeVisible()
+    const emptyState = page.getByRole('cell', { name: /No SKUs found/ })
+    const skuRow = page
+      .locator('tbody tr')
+      .filter({ hasNotText: 'No SKUs found' })
+      .first()
+    await expect(emptyState.or(skuRow)).toBeVisible()
   })
 })

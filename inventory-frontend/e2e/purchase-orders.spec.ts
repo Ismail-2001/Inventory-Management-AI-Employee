@@ -9,7 +9,7 @@ test.describe('Purchase Orders page', () => {
 
   test('shows history section', async ({ page }) => {
     await page.goto('/purchase-orders')
-    await expect(page.getByText('History')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
   })
 
   test('shows pending section if there are pending orders', async ({ page }) => {
