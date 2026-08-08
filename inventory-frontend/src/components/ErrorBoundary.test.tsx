@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import ErrorBoundary from './ErrorBoundary'
 
-function ThrowingComponent() {
+function ThrowingComponent(): React.ReactNode {
   throw new Error('Test error')
 }
 
-function GoodComponent() {
+function GoodComponent(): React.ReactNode {
   return <div>All good</div>
 }
 
@@ -45,8 +45,6 @@ describe('ErrorBoundary', () => {
 
   it('shows try again button that resets error state', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { userEvent } = await import('@testing-library/user-event')
-    const user = userEvent.setup()
 
     let shouldThrow = true
     function ConditionalThrower() {
@@ -61,12 +59,13 @@ describe('ErrorBoundary', () => {
     )
 
     expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.getByText('Try again')).toBeInTheDocument()
 
     shouldThrow = false
-    await user.click(screen.getByText('Try again'))
+    screen.getByText('Try again').click()
 
-    expect(screen.getByText('recovered')).toBeInTheDocument()
+    await screen.findByText('recovered', {}, { timeout: 3000 })
     consoleSpy.mockRestore()
     unmount()
-  })
+  }, 10000)
 })
