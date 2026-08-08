@@ -12,13 +12,18 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from agent.auth import _hexdigest
 from agent.db import async_session_factory, session_scope
 from agent.models import Merchant, User
+from agent.saml import (
+    build_authn_request_url,
+    build_sp_metadata,
+    parse_saml_response,
+)
 from agent.sso import (
     get_sso_providers,
     get_sso_session,
@@ -100,14 +105,63 @@ async def sso_login(provider: str = "") -> Any:
         return RedirectResponse(url=f"{authorization_endpoint}?{params}")
 
     elif target.provider_type == "saml":
-        raise HTTPException(status_code=501, detail="SAML login not yet implemented — use OIDC")
+        if not target.sso_url:
+            raise HTTPException(status_code=500, detail="SAML SSO URL not configured")
+        redirect_url = build_authn_request_url(
+            entity_id=target.client_id,
+            sso_url=target.sso_url,
+            acs_url=target.callback_url,
+            relay_state=target.name,
+        )
+        return RedirectResponse(url=redirect_url)
 
     raise HTTPException(status_code=400, detail=f"Unknown provider type: {target.provider_type}")
 
 
-@router.post("/callback")
-async def sso_callback(request: Request, body: SSOCallbackRequest) -> SSOSessionResponse:
+@router.get("/metadata")
+async def sso_saml_metadata(provider: str = "") -> Response:
+    """Return the SP metadata document for registering with a SAML IdP."""
     providers = get_sso_providers()
+    if not providers:
+        raise HTTPException(status_code=404, detail="SSO not configured")
+
+    target = None
+    if provider:
+        target = next((p for p in providers if p.name == provider), None)
+    if not target:
+        target = next((p for p in providers if p.provider_type == "saml"), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="SAML provider not configured")
+
+    metadata = build_sp_metadata(
+        entity_id=target.client_id,
+        acs_url=target.callback_url,
+        slo_url=target.slo_url,
+    )
+    return PlainTextResponse(content=metadata, media_type="application/samlmetadata+xml")
+
+
+@router.post("/callback")
+async def sso_callback(request: Request, body: SSOCallbackRequest | None = None) -> SSOSessionResponse:
+    providers = get_sso_providers()
+    if not providers:
+        raise HTTPException(status_code=404, detail="SSO not configured")
+
+    form_data = await request.form()
+    saml_response = form_data.get("SAMLResponse")
+
+    if saml_response:
+        provider_name = form_data.get("RelayState") or form_data.get("provider") or ""
+        provider = next((p for p in providers if p.provider_type == "saml" and (not provider_name or p.name == provider_name)), None)
+        if not provider:
+            provider = next((p for p in providers if p.provider_type == "saml"), None)
+        if not provider:
+            raise HTTPException(status_code=404, detail="SAML provider not configured")
+        return await _handle_saml_callback(str(saml_response), provider)
+
+    if body is None:
+        raise HTTPException(status_code=400, detail="Missing SAMLResponse or callback body")
+
     provider = None
     if body.provider:
         provider = next((p for p in providers if p.name == body.provider), None)
@@ -126,7 +180,7 @@ async def sso_callback(request: Request, body: SSOCallbackRequest) -> SSOSession
         userinfo = await oidc_get_userinfo(access_token, provider)
     except Exception as exc:
         logger.error("SSO OIDC callback failed: %s", exc)
-        raise HTTPException(status_code=401, detail="SSO authentication failed")
+        raise HTTPException(status_code=401, detail="SSO authentication failed") from exc
 
     email = userinfo.get("email", "")
     if not email:
@@ -180,6 +234,38 @@ async def sso_me(x_session_token: str = Header(None)) -> dict[str, Any]:
 def _generate_state() -> str:
     import secrets
     return secrets.token_urlsafe(32)
+
+
+async def _handle_saml_callback(saml_response: str, provider: Any) -> SSOSessionResponse:
+    try:
+        result = parse_saml_response(
+            saml_response,
+            sp_entity_id=provider.client_id,
+            acs_url=provider.callback_url,
+            idp_entity_id=provider.idp_entity_id or provider.client_id,
+            certificate=provider.certificate,
+        )
+    except Exception as exc:
+        logger.error("SSO SAML callback failed: %s", exc)
+        raise HTTPException(status_code=401, detail="SAML authentication failed") from exc
+
+    email = result.email
+    if not validate_email_domain(email, provider.allowed_domains):
+        raise HTTPException(status_code=403, detail=f"Email domain not allowed: {email.split('@')[-1]}")
+
+    userinfo: dict[str, Any] = {"email": email, "saml_name_id": result.name_id}
+    userinfo.update(result.attributes)
+    merchant, user = await _find_or_create_sso_user(email, userinfo)
+    sso_session = get_sso_session()
+    token = sso_session.create_token(user.id, merchant.id, email, user.role)
+
+    return SSOSessionResponse(
+        token=token,
+        user_id=user.id,
+        merchant_id=merchant.id,
+        email=email,
+        role=user.role,
+    )
 
 
 async def _find_or_create_sso_user(email: str, userinfo: dict[str, Any]) -> tuple[Merchant, User]:

@@ -136,6 +136,9 @@ class Settings:
     sso_saml_entity_id: str = field(
         default_factory=lambda: os.getenv("SSO_SAML_ENTITY_ID", "")
     )
+    sso_saml_idp_entity_id: str = field(
+        default_factory=lambda: os.getenv("SSO_SAML_IDP_ENTITY_ID", "")
+    )
     sso_saml_sso_url: str = field(
         default_factory=lambda: os.getenv("SSO_SAML_SSO_URL", "")
     )

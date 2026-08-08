@@ -27,8 +27,9 @@ class SSOProvider:
     client_id: str
     client_secret: str
     discovery_url: str = ""  # OIDC .well-known/openid-configuration
+    idp_entity_id: str = ""  # SAML IdP entity ID
     sso_url: str = ""  # SAML SSO URL
-    slob_url: str = ""  # SAML Single Logout URL
+    slo_url: str = ""  # SAML Single Logout URL
     certificate: str = ""  # SAML X.509 cert
     allowed_domains: list[str] = field(default_factory=list)
     callback_url: str = ""
@@ -165,8 +166,9 @@ def get_sso_providers() -> list[SSOProvider]:
             provider_type="saml",
             client_id=settings.sso_saml_entity_id,
             client_secret="",
+            idp_entity_id=settings.sso_saml_idp_entity_id or settings.sso_saml_entity_id,
             sso_url=settings.sso_saml_sso_url,
-            slob_url=settings.sso_saml_slo_url,
+            slo_url=settings.sso_saml_slo_url,
             certificate=settings.sso_saml_certificate,
             allowed_domains=[d.strip() for d in settings.sso_allowed_domains.split(",") if d.strip()],
             callback_url=f"{settings.public_api_url}/api/v1/auth/sso/callback",
