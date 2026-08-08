@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -82,6 +82,7 @@ class SalesHistory(Base):
 
     __table_args__ = (
         Index("ix_sales_sku_date", "sku_id", "date"),
+        UniqueConstraint("sku_id", "date", name="uq_sales_history_sku_date"),
         {"sqlite_autoincrement": True},
     )
 

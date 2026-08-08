@@ -131,7 +131,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: inventory-frontend/package-lock.json
       - name: Install frontend dependencies
@@ -196,7 +196,7 @@ jobs:
           curl -sf http://localhost:8002/health || exit 1
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: inventory-frontend/package-lock.json
       - name: Install frontend dependencies

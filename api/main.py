@@ -359,7 +359,7 @@ app.add_middleware(
 
 from agent.telemetry import RequestTracingMiddleware
 
-app.add_middleware(RequestTracingMiddleware)  # type: ignore[arg-type]
+app.add_middleware(RequestTracingMiddleware)
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -408,7 +408,7 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
-app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 class CorrelationIdMiddleware:
@@ -445,7 +445,7 @@ class CorrelationIdMiddleware:
         metrics.observe("http_request_duration_seconds", elapsed, method=method, path=path)
 
 
-app.add_middleware(CorrelationIdMiddleware)  # type: ignore[arg-type]
+app.add_middleware(CorrelationIdMiddleware)
 
 
 class InflightTracker:
@@ -488,7 +488,7 @@ class InflightMiddleware:
             await inflight_tracker.decrement()
 
 
-app.add_middleware(InflightMiddleware)  # type: ignore[arg-type]
+app.add_middleware(InflightMiddleware)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():

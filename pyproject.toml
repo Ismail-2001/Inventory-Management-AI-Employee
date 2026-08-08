@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Ensure `pytest tests/` (CI runs the bare command, not `python -m pytest`)
+# can import the `agent`/`shared` packages at the repo root.
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py312"

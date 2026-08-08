@@ -1,16 +1,15 @@
-from typing import Any
-
 from sqlalchemy import select
 
 from agent.config import settings
 from agent.db import async_session_factory
 from agent.models import Sku
 from agent.shopify_sync import sync_products_and_inventory, sync_sales_history
+from agent.state import State
 from agent.telemetry import trace_node
 
 
 @trace_node("sync")
-async def sync_node(state: dict[str, Any]) -> dict[str, Any]:
+async def sync_node(state: State) -> State:
     synced_products = 0
     synced_sales = 0
 

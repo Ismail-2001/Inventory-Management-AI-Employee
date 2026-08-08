@@ -7,6 +7,7 @@ from sqlalchemy import select
 from agent.db import async_session_factory
 from agent.forecast import exponential_smoothing
 from agent.models import Forecast, SalesHistory
+from agent.state import State
 from agent.telemetry import trace_node
 from shared.cache import forecast_cache
 
@@ -61,7 +62,7 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
 
 
 @trace_node("forecast")
-async def forecast_node(state: dict[str, Any]) -> dict[str, Any]:
+async def forecast_node(state: State) -> State:
     skus = state.get("skus", [])
 
     async def _forecast_one(sku: dict[str, Any]) -> dict[str, Any] | None:

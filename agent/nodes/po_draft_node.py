@@ -9,6 +9,7 @@ from agent.inventory_agent import agent as llm_agent
 from agent.llm_usage import log_llm_call, should_skip_llm_call
 from agent.models import POStatus, PurchaseOrder, Supplier
 from agent.ordering import build_reasoning_input, calculate_reorder_quantity
+from agent.state import State
 from agent.telemetry import trace_node
 
 
@@ -71,7 +72,7 @@ async def _generate_reasoning(data: dict[str, Any]) -> str:
 
 
 @trace_node("po_draft")
-async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
+async def po_draft_node(state: State) -> State:
     alerts = state.get("risk_alerts", [])
     forecasts_map = {f["sku_id"]: f for f in state.get("forecasts", [])}
     skus_map = {s["id"]: s for s in state.get("skus", [])}

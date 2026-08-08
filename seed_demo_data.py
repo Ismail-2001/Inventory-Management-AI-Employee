@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from agent.config import settings
-from agent.models import SalesHistory, Sku
+from agent.models import Merchant, SalesHistory, Sku
 
 engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -146,6 +146,18 @@ async def seed_demo_data():
             print("   ℹ️  Database already has SKUs — skipping seed.")
             return
 
+        print("   🏬 Ensuring demo merchant exists...")
+        merchant = (await session.execute(select(Merchant).limit(1))).scalars().first()
+        if merchant is None:
+            merchant = Merchant(
+                name="Demo US Retailer",
+                hashed_api_key="__demo_merchant__",
+                shopify_store_domain="demo.myshopify.com",
+            )
+            session.add(merchant)
+            await session.flush()
+        merchant_id = merchant.id
+
         print("   📦 Inserting 10 demo SKUs...")
         for s in DEMO_SKUS:
             sku = Sku(
@@ -154,7 +166,7 @@ async def seed_demo_data():
                 title=s["title"],
                 current_stock=s["current_stock"],
                 location_id=s["location_id"],
-                merchant_id=0,
+                merchant_id=merchant_id,
             )
             session.add(sku)
             await session.flush()

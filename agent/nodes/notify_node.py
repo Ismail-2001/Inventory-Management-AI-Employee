@@ -1,9 +1,9 @@
 import contextlib
 import logging
-from typing import Any
 
 from agent.config import settings
 from agent.signing import sign_token
+from agent.state import State
 from agent.telemetry import trace_node
 from shared.slack import send_slack
 
@@ -14,7 +14,7 @@ def _make_domain() -> str:
     return settings.public_api_url.rstrip("/") if settings.public_api_url else "http://localhost:8002"
 
 
-def _build_pending_summary(state: dict[str, Any]) -> str:
+def _build_pending_summary(state: State) -> str:
     alerts = state.get("risk_alerts", [])
     pos = state.get("purchase_orders", [])
 
@@ -50,7 +50,7 @@ def _build_pending_summary(state: dict[str, Any]) -> str:
     return "\n".join(summary_lines)
 
 
-def _build_confirmed_summary(state: dict[str, Any]) -> str:
+def _build_confirmed_summary(state: State) -> str:
     pos = state.get("purchase_orders", [])
     if not pos:
         return ""
@@ -66,7 +66,7 @@ def _build_confirmed_summary(state: dict[str, Any]) -> str:
 
 
 @trace_node("notify_pending")
-async def notify_pending_node(state: dict[str, Any]) -> dict[str, Any]:
+async def notify_pending_node(state: State) -> State:
     summary = _build_pending_summary(state)
     if not summary:
         return {**state, "notification_summary": ""}
@@ -79,7 +79,7 @@ async def notify_pending_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 @trace_node("notify_confirmed")
-async def notify_confirmed_node(state: dict[str, Any]) -> dict[str, Any]:
+async def notify_confirmed_node(state: State) -> State:
     summary = _build_confirmed_summary(state)
     if not summary:
         return {**state}
@@ -91,5 +91,5 @@ async def notify_confirmed_node(state: dict[str, Any]) -> dict[str, Any]:
     return {**state, "confirmation_summary": summary}
 
 
-async def notify_node(state: dict[str, Any]) -> dict[str, Any]:
+async def notify_node(state: State) -> State:
     return await notify_pending_node(state)
