@@ -1,10 +1,11 @@
-import pytest
-from fastapi import HTTPException
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from agent import auth as auth_module
-from agent.auth import get_current_user, require_role, verify_api_key
-from agent.models import Merchant, User
+from agent.auth import require_role, verify_api_key
+from agent.models import User
 
 
 class FakeResult:

@@ -3,9 +3,11 @@ Tests for Inventory Agent
 Run: pytest tests/ -v
 """
 
-import pytest
 from unittest.mock import patch
-from agent.inventory_agent import InventoryAgent, InventoryItem, Config
+
+import pytest
+
+from agent.inventory_agent import InventoryAgent, InventoryItem
 
 
 @pytest.fixture

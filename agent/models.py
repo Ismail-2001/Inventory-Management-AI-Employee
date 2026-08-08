@@ -1,8 +1,9 @@
 import enum
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,11 +23,11 @@ class Sku(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     shopify_variant_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    merchant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
-    sku_code: Mapped[Optional[str]] = mapped_column(String(128))
+    merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
+    sku_code: Mapped[str | None] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(512))
     current_stock: Mapped[int] = mapped_column(Integer, default=0)
-    location_id: Mapped[Optional[str]] = mapped_column(String(64))
+    location_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -60,10 +61,10 @@ class Merchant(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     hashed_api_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
-    key_prefix: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
+    key_prefix: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
     tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
-    branding: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
+    branding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -90,7 +91,7 @@ class Forecast(Base):
     sku_id: Mapped[int] = mapped_column(Integer, ForeignKey("skus.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     predicted_daily_demand: Mapped[float] = mapped_column(Float, nullable=False)
-    days_of_stock_remaining: Mapped[Optional[float]] = mapped_column(Float)
+    days_of_stock_remaining: Mapped[float | None] = mapped_column(Float)
     model_version: Mapped[str] = mapped_column(String(32), default="exp_smoothing_v1")
 
     sku: Mapped["Sku"] = relationship(back_populates="forecasts")
@@ -122,11 +123,11 @@ class Supplier(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
-    contact_email: Mapped[Optional[str]] = mapped_column(String(256))
+    contact_email: Mapped[str | None] = mapped_column(String(256))
     default_lead_time_days: Mapped[int] = mapped_column(Integer, default=7)
     default_moq: Mapped[int] = mapped_column(Integer, default=1)
-    moq_by_sku: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
-    unit_cost_by_sku: Mapped[Optional[dict]] = mapped_column(JSONB, default={})
+    moq_by_sku: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
+    unit_cost_by_sku: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -135,21 +136,21 @@ class PurchaseOrder(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     sku_id: Mapped[int] = mapped_column(Integer, ForeignKey("skus.id", ondelete="CASCADE"), nullable=False, index=True)
-    merchant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
-    supplier_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"))
+    merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), index=True)
+    supplier_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("suppliers.id", ondelete="SET NULL"))
     status: Mapped[POStatus] = mapped_column(SAEnum(POStatus), nullable=False, default=POStatus.draft)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_cost: Mapped[float] = mapped_column(Float, default=0.0)
     total_cost: Mapped[float] = mapped_column(Float, default=0.0)
-    thread_id: Mapped[Optional[str]] = mapped_column(String(64))
-    reasoning_text: Mapped[Optional[str]] = mapped_column(Text)
-    approved_by: Mapped[Optional[str]] = mapped_column(String(256))
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    rejected_reason: Mapped[Optional[str]] = mapped_column(Text)
+    thread_id: Mapped[str | None] = mapped_column(String(64))
+    reasoning_text: Mapped[str | None] = mapped_column(Text)
+    approved_by: Mapped[str | None] = mapped_column(String(256))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    edited_before_approval: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    original_quantity: Mapped[Optional[int]] = mapped_column(Integer)
+    edited_before_approval: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    original_quantity: Mapped[int | None] = mapped_column(Integer)
 
     sku: Mapped["Sku"] = relationship()
     supplier: Mapped[Optional["Supplier"]] = relationship()
@@ -165,11 +166,11 @@ class POOutcome(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     po_id: Mapped[int] = mapped_column(Integer, ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True)
-    expected_stockout_prevented: Mapped[Optional[bool]] = mapped_column(Boolean)
-    actual_stock_at_delivery: Mapped[Optional[int]] = mapped_column(Integer)
-    actual_stockout_occurred: Mapped[Optional[bool]] = mapped_column(Boolean)
-    forecast_error_pct: Mapped[Optional[float]] = mapped_column(Float)
-    evaluated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    expected_stockout_prevented: Mapped[bool | None] = mapped_column(Boolean)
+    actual_stock_at_delivery: Mapped[int | None] = mapped_column(Integer)
+    actual_stockout_occurred: Mapped[bool | None] = mapped_column(Boolean)
+    forecast_error_pct: Mapped[float | None] = mapped_column(Float)
+    evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ReflectionInsight(Base):
@@ -178,7 +179,7 @@ class ReflectionInsight(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     week_start: Mapped[date] = mapped_column(Date, nullable=False)
     insight_text: Mapped[str] = mapped_column(Text, nullable=False)
-    supporting_data: Mapped[Optional[dict]] = mapped_column(JSONB)
+    supporting_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -187,9 +188,9 @@ class LlmUsage(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     node_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    tokens_in: Mapped[Optional[int]] = mapped_column(Integer)
-    tokens_out: Mapped[Optional[int]] = mapped_column(Integer)
-    estimated_cost: Mapped[Optional[float]] = mapped_column(Float)
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    estimated_cost: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -201,8 +202,8 @@ class IdempotencyKey(Base):
     __tablename__ = "idempotency_keys"
 
     key: Mapped[str] = mapped_column(String(255), primary_key=True)
-    endpoint: Mapped[Optional[str]] = mapped_column(String(256))
-    response_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    endpoint: Mapped[str | None] = mapped_column(String(256))
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -210,7 +211,7 @@ class WebhookEvent(Base):
     __tablename__ = "webhook_events"
 
     event_id: Mapped[str] = mapped_column(String(256), primary_key=True)
-    event_type: Mapped[Optional[str]] = mapped_column(String(128))
+    event_type: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -224,7 +225,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     merchant_id: Mapped[int] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), nullable=False)
     email: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
-    hashed_password: Mapped[Optional[str]] = mapped_column(String(128))
+    hashed_password: Mapped[str | None] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(16), default="staff")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -233,12 +234,12 @@ class FailedWebhook(Base):
     __tablename__ = "failed_webhooks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    event_id: Mapped[Optional[str]] = mapped_column(String(256))
-    event_type: Mapped[Optional[str]] = mapped_column(String(128))
-    payload_text: Mapped[Optional[str]] = mapped_column(Text)
-    error: Mapped[Optional[str]] = mapped_column(Text)
+    event_id: Mapped[str | None] = mapped_column(String(256))
+    event_type: Mapped[str | None] = mapped_column(String(128))
+    payload_text: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -246,13 +247,13 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    merchant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="SET NULL"))
+    merchant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("merchants.id", ondelete="SET NULL"))
     actor_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_id: Mapped[Optional[str]] = mapped_column(String(128))
+    actor_id: Mapped[str | None] = mapped_column(String(128))
     action: Mapped[str] = mapped_column(String(64), nullable=False)
-    target_type: Mapped[Optional[str]] = mapped_column(String(64))
-    target_id: Mapped[Optional[str]] = mapped_column(String(64))
-    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    target_type: Mapped[str | None] = mapped_column(String(64))
+    target_id: Mapped[str | None] = mapped_column(String(64))
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

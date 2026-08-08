@@ -1,19 +1,21 @@
 import asyncio
-from datetime import datetime, timezone
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from langgraph.types import Command
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
-from agent.auth import verify_api_key, require_role
 from agent.audit import log_audit_event
-from api.rate_limit import limiter, _get_tier_limit
+from agent.auth import require_role, verify_api_key
 from agent.db import async_session_factory, session_scope
-from agent.models import IdempotencyKey, POStatus, PurchaseOrder
-from agent.signing import sign_token, verify_token
+from agent.models import IdempotencyKey, Merchant, POStatus, PurchaseOrder
+from agent.signing import verify_token
+from api.rate_limit import _get_tier_limit, limiter
 
 router = APIRouter()
-_idempotency_cache: dict[str, dict] = {}
+_idempotency_cache: dict[str, dict[str, Any]] = {}
 _IDEMPOTENCY_CACHE_MAX = 500
 
 
@@ -33,7 +35,7 @@ async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
     return po, thread_id
 
 
-async def _mark_edited_if_changed(po_id: int, approved_quantity: int | None):
+async def _mark_edited_if_changed(po_id: int, approved_quantity: int | None) -> None:
     if approved_quantity is None:
         return
     async with async_session_factory() as session:
@@ -44,7 +46,7 @@ async def _mark_edited_if_changed(po_id: int, approved_quantity: int | None):
             await session.commit()
 
 
-async def _update_po_status(po_id: int, status: POStatus, **extra):
+async def _update_po_status(po_id: int, status: POStatus, **extra: Any) -> None:
     async with session_scope(async_session_factory) as session:
         result = await session.execute(
             select(PurchaseOrder)
@@ -60,7 +62,7 @@ async def _update_po_status(po_id: int, status: POStatus, **extra):
         await session.commit()
 
 
-async def _resume_graph(request: Request, thread_id: str, resume_value: str):
+async def _resume_graph(request: Request, thread_id: str, resume_value: str) -> None:
     graph = request.app.state.graph
     await asyncio.wait_for(
         graph.ainvoke(
@@ -71,7 +73,7 @@ async def _resume_graph(request: Request, thread_id: str, resume_value: str):
     )
 
 
-async def _run_with_idempotency(key: str | None, endpoint: str, action):
+async def _run_with_idempotency(key: str | None, endpoint: str, action: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
     if key and key in _idempotency_cache:
         return _idempotency_cache[key]
 
@@ -79,7 +81,7 @@ async def _run_with_idempotency(key: str | None, endpoint: str, action):
         async with session_scope(async_session_factory) as session:
             result = await session.execute(select(IdempotencyKey).where(IdempotencyKey.key == key))
             existing = result.scalar_one_or_none()
-            if existing:
+            if existing and existing.response_json is not None:
                 _idempotency_cache[key] = existing.response_json
                 return existing.response_json
 
@@ -102,8 +104,8 @@ async def list_purchase_orders(
     status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    merchant=Depends(verify_api_key),
-):
+    merchant: Merchant = Depends(verify_api_key),
+) -> dict[str, Any]:
     async with session_scope(async_session_factory) as session:
         query = select(PurchaseOrder)
         count_q = select(func.count(PurchaseOrder.id))
@@ -149,14 +151,14 @@ async def list_purchase_orders(
     }
 
 
-async def _approve_po_impl(request: Request, po_id: int, approved_by: str, quantity: int | None, merchant_id: int | None = None):
+async def _approve_po_impl(request: Request, po_id: int, approved_by: str, quantity: int | None, merchant_id: int | None = None) -> dict[str, Any]:
     po, thread_id = await _resolve_po(po_id)
     await _mark_edited_if_changed(po_id, quantity)
     await _resume_graph(request, thread_id, "approve")
     await _update_po_status(
         po_id, POStatus.approved,
         approved_by=approved_by,
-        approved_at=datetime.now(timezone.utc),
+        approved_at=datetime.now(UTC),
         quantity=quantity if quantity is not None else po.quantity,
     )
     await log_audit_event(
@@ -165,13 +167,13 @@ async def _approve_po_impl(request: Request, po_id: int, approved_by: str, quant
         actor_id=approved_by,
         action="po.approve",
         target_type="purchase_order",
-        target_id=po_id,
+        target_id=str(po_id),
         details={"quantity": quantity, "thread_id": thread_id},
     )
     return {"status": "approved", "po_id": po_id}
 
 
-async def _reject_po_impl(request: Request, po_id: int, reason: str, merchant_id: int | None = None):
+async def _reject_po_impl(request: Request, po_id: int, reason: str, merchant_id: int | None = None) -> dict[str, Any]:
     po, thread_id = await _resolve_po(po_id)
     await _resume_graph(request, thread_id, "reject")
     await _update_po_status(po_id, POStatus.rejected, rejected_reason=reason or None)
@@ -181,7 +183,7 @@ async def _reject_po_impl(request: Request, po_id: int, reason: str, merchant_id
         actor_id="merchant",
         action="po.reject",
         target_type="purchase_order",
-        target_id=po_id,
+        target_id=str(po_id),
         details={"reason": reason, "thread_id": thread_id},
     )
     return {"status": "rejected", "po_id": po_id}
@@ -194,10 +196,10 @@ async def approve_po(
     po_id: int,
     approved_by: str = "merchant",
     quantity: int | None = None,
-    merchant=Depends(verify_api_key),
-    _user=Depends(require_role("owner", "staff")),
+    merchant: Merchant = Depends(verify_api_key),
+    _user: Any = Depends(require_role("owner", "staff")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-):
+) -> dict[str, Any]:
     return await _run_with_idempotency(
         idempotency_key,
         f"/api/v1/po/{po_id}/approve",
@@ -211,10 +213,10 @@ async def reject_po(
     request: Request,
     po_id: int,
     reason: str = "",
-    merchant=Depends(verify_api_key),
-    _user=Depends(require_role("owner", "staff")),
+    merchant: Merchant = Depends(verify_api_key),
+    _user: Any = Depends(require_role("owner", "staff")),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-):
+) -> dict[str, Any]:
     return await _run_with_idempotency(
         idempotency_key,
         f"/api/v1/po/{po_id}/reject",
@@ -229,7 +231,7 @@ async def po_action_via_token(
     token: str = Query(...),
     reason: str = Query(default=""),
     quantity: int | None = Query(default=None, ge=1),
-):
+) -> dict[str, Any]:
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -244,7 +246,7 @@ async def po_action_via_token(
         await _update_po_status(
             po_id, POStatus.approved,
             approved_by="token",
-            approved_at=datetime.now(timezone.utc),
+            approved_at=datetime.now(UTC),
             quantity=quantity if quantity is not None else po.quantity,
         )
         return {"status": "approved", "po_id": po_id}

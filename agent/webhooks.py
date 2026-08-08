@@ -3,23 +3,24 @@ import hashlib
 import hmac
 import json
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import HTTPException, Request
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from agent.config import settings
 from agent.db import async_session_factory, session_scope
-from agent.models import FailedWebhook, Sku, SalesHistory, WebhookEvent
-from agent.shopify_sync import sync_products_and_inventory, sync_single_variant
+from agent.models import FailedWebhook, SalesHistory, Sku, WebhookEvent
+from agent.shopify_sync import sync_single_variant
 
 _processed_webhook_events: OrderedDict[str, None] = OrderedDict()
 _MAX_WEBHOOK_CACHE_SIZE = 1000
 
 
-async def verify_shopify_webhook(request: Request):
+async def verify_shopify_webhook(request: Request) -> bytes:
     body = await request.body()
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not hmac_header:
@@ -49,7 +50,7 @@ async def _webhook_already_processed(event_id: str | None) -> bool:
         return result.scalar_one_or_none() is not None
 
 
-async def _mark_webhook_processed(event_id: str | None, event_type: str | None):
+async def _mark_webhook_processed(event_id: str | None, event_type: str | None) -> None:
     if not event_id:
         return
     if event_id in _processed_webhook_events:
@@ -63,19 +64,19 @@ async def _mark_webhook_processed(event_id: str | None, event_type: str | None):
         await session.commit()
 
 
-async def _enqueue_failed_webhook(event_id: str | None, event_type: str | None, payload_text: str, error: str):
+async def _enqueue_failed_webhook(event_id: str | None, event_type: str | None, payload_text: str, error: str) -> None:
     async with session_scope(async_session_factory) as session:
         session.add(FailedWebhook(
             event_id=event_id,
             event_type=event_type,
             payload_text=payload_text[:10000],
             error=str(error)[:1000],
-            next_retry_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            next_retry_at=datetime.now(UTC) + timedelta(minutes=5),
         ))
         await session.commit()
 
 
-async def handle_webhook_event(request: Request, event_type: str, handler: Callable[[dict], Awaitable[None]]):
+async def handle_webhook_event(request: Request, event_type: str, handler: Callable[[dict[str, Any]], Awaitable[None]]) -> dict[str, Any]:
     event_id = request.headers.get("X-Shopify-Webhook-Id")
     if await _webhook_already_processed(event_id):
         return {"status": "ignored", "reason": "duplicate_webhook", "event_id": event_id}
@@ -92,8 +93,8 @@ async def handle_webhook_event(request: Request, event_type: str, handler: Calla
     return {"status": "ok", "event_id": event_id}
 
 
-async def retry_failed_webhooks(max_retries: int = 3):
-    now = datetime.now(timezone.utc)
+async def retry_failed_webhooks(max_retries: int = 3) -> None:
+    now = datetime.now(UTC)
     async with session_scope(async_session_factory) as session:
         result = await session.execute(
             select(FailedWebhook).where(
@@ -106,6 +107,8 @@ async def retry_failed_webhooks(max_retries: int = 3):
     for fw in failed:
         fw_id = fw.id
         try:
+            if not fw.payload_text:
+                raise ValueError("Webhook payload missing")
             payload = json.loads(fw.payload_text)
             event_type = fw.event_type or ""
             if event_type == "inventory_levels_update":
@@ -124,11 +127,11 @@ async def retry_failed_webhooks(max_retries: int = 3):
                 fresh = await session.get(FailedWebhook, fw_id)
                 if fresh:
                     fresh.retry_count += 1
-                    fresh.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=5 * (2 ** fresh.retry_count))
+                    fresh.next_retry_at = datetime.now(UTC) + timedelta(minutes=5 * (2 ** fresh.retry_count))
                     await session.commit()
 
 
-async def handle_inventory_update(payload: dict):
+async def handle_inventory_update(payload: dict[str, Any]) -> None:
     """A single stock level changed. Fetch and upsert only that one variant
     via its inventory_item_id - never a full catalog resync."""
     inventory_item_id = str(payload.get("inventory_item_id", ""))
@@ -136,7 +139,7 @@ async def handle_inventory_update(payload: dict):
         await sync_single_variant(inventory_item_id)
 
 
-async def handle_order_create(payload: dict):
+async def handle_order_create(payload: dict[str, Any]) -> None:
     """Shopify's orders/create payload already contains the line items with
     SKU and quantity - write straight into sales_history from the payload
     instead of calling back out to the Shopify API at all."""
@@ -145,7 +148,7 @@ async def handle_order_create(payload: dict):
     order_date = (
         datetime.fromisoformat(created_at.replace("Z", "+00:00")).date()
         if created_at
-        else datetime.now(timezone.utc).date()
+        else datetime.now(UTC).date()
     )
 
     sku_codes = [li.get("sku") for li in line_items if li.get("sku")]
@@ -175,7 +178,7 @@ async def handle_order_create(payload: dict):
         await session.commit()
 
 
-async def handle_product_update(payload: dict):
+async def handle_product_update(payload: dict[str, Any]) -> None:
     """Shopify's products/update payload already includes the full variants
     array with current inventory_quantity - upsert straight from the
     payload instead of a full catalog resync."""

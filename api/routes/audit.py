@@ -4,11 +4,14 @@ Endpoints:
     GET /api/v1/audit/logs      — List audit logs with filters
     GET /api/v1/audit/export    — Export audit logs as JSONL
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from collections.abc import Iterator
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from agent.auth import verify_api_key
 from agent.audit import get_audit_logs
+from agent.auth import verify_api_key
 from agent.models import Merchant
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
@@ -23,7 +26,7 @@ async def list_audit_logs(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     merchant: Merchant = Depends(verify_api_key),
-):
+) -> dict[str, Any]:
     entries, total = await get_audit_logs(
         merchant_id=merchant.id if merchant.id != 0 else None,
         actor_type=actor_type,
@@ -45,7 +48,7 @@ async def export_audit_logs(
     request: Request,
     action: str | None = Query(None),
     merchant: Merchant = Depends(verify_api_key),
-):
+) -> StreamingResponse:
     entries, total = await get_audit_logs(
         merchant_id=merchant.id if merchant.id != 0 else None,
         action=action,
@@ -54,7 +57,7 @@ async def export_audit_logs(
 
     import json
 
-    def generate():
+    def generate() -> Iterator[str]:
         for entry in entries:
             yield json.dumps(entry, default=str) + "\n"
 

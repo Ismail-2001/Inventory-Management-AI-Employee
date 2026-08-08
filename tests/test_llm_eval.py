@@ -6,17 +6,14 @@ These tests mock the DB layer and test pure node logic (risk, forecast math,
 ordering). The LLM-as-Judge scoring is available when a judge LLM is provided;
 without one, we use heuristic structural checks.
 """
-import json
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from agent.risk import determine_risk_level
 from agent.forecast import exponential_smoothing
-from agent.ordering import calculate_reorder_quantity, build_reasoning_input
-from shared.eval_harness import EvalScenario, EvalResult, run_eval, run_eval_suite
-
+from agent.ordering import build_reasoning_input, calculate_reorder_quantity
+from agent.risk import determine_risk_level
+from shared.eval_harness import EvalResult, EvalScenario, run_eval
 
 # ── Pure-logic eval scenarios (no DB required) ───────────────────────
 
@@ -170,9 +167,7 @@ def _heuristic_score_risk(scenario: EvalScenario, output: dict) -> float:
         return 1.0 if level == "critical" else 0.0
     elif scenario.name == "risk_warning_near_stockout":
         return 1.0 if level == "warning" else 0.0
-    elif scenario.name == "risk_safe_stock":
-        return 1.0 if level == "safe" else 0.0
-    elif scenario.name == "risk_null_days":
+    elif scenario.name == "risk_safe_stock" or scenario.name == "risk_null_days":
         return 1.0 if level == "safe" else 0.0
     return 0.5
 

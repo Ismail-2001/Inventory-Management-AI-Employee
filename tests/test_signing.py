@@ -1,5 +1,3 @@
-import time
-import pytest
 from agent.signing import sign_token, verify_token
 
 

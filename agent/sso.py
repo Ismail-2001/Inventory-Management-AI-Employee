@@ -11,11 +11,9 @@ Usage:
 """
 import hashlib
 import hmac
-import json
 import time
-import secrets
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any
 
 import httpx
 
@@ -52,7 +50,7 @@ class SSOSession:
         sig = hmac.new(self._secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}:{sig}"
 
-    def verify_token(self, token: str) -> Optional[dict]:
+    def verify_token(self, token: str) -> dict[str, Any] | None:
         try:
             parts = token.split(":")
             if len(parts) != 6:
@@ -86,7 +84,7 @@ class SSOSession:
             return None
 
 
-_sso_session = None
+_sso_session: SSOSession | None = None
 
 
 def get_sso_session() -> SSOSession:
@@ -96,14 +94,15 @@ def get_sso_session() -> SSOSession:
     return _sso_session
 
 
-async def oidc_discover(discovery_url: str) -> dict:
+async def oidc_discover(discovery_url: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(discovery_url)
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
 
 
-async def oidc_exchange_code(code: str, provider: SSOProvider) -> dict:
+async def oidc_exchange_code(code: str, provider: SSOProvider) -> dict[str, Any]:
     token_url = provider.discovery_url.replace(
         "/.well-known/openid-configuration", "/oauth/token"
     ) if provider.discovery_url else ""
@@ -120,10 +119,11 @@ async def oidc_exchange_code(code: str, provider: SSOProvider) -> dict:
             "redirect_uri": provider.callback_url,
         })
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
 
 
-async def oidc_get_userinfo(access_token: str, provider: SSOProvider) -> dict:
+async def oidc_get_userinfo(access_token: str, provider: SSOProvider) -> dict[str, Any]:
     userinfo_url = provider.discovery_url.replace(
         "/.well-known/openid-configuration", "/userinfo"
     ) if provider.discovery_url else ""
@@ -136,7 +136,8 @@ async def oidc_get_userinfo(access_token: str, provider: SSOProvider) -> dict:
             "Authorization": f"Bearer {access_token}"
         })
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
 
 
 def validate_email_domain(email: str, allowed_domains: list[str]) -> bool:

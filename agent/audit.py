@@ -4,8 +4,8 @@ Logs every action with actor, target, details, and timestamp.
 Writes to the `audit_log` table and optionally to structured JSON logs.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 
@@ -15,7 +15,7 @@ from agent.models import AuditLog
 logger = logging.getLogger("audit")
 
 
-async def log(action: str, details: dict[str, Any] | None = None, **kwargs):
+async def log(action: str, details: dict[str, Any] | None = None, **kwargs: Any) -> None:
     """Legacy structured log helper — writes to audit_log table + structured logger."""
     merged = dict(details or {})
     merged.update(kwargs)
@@ -30,7 +30,7 @@ async def log(action: str, details: dict[str, Any] | None = None, **kwargs):
                 target_type=merged.pop("target_type", None),
                 target_id=str(merged.pop("target_id", "")) if merged.get("target_id") else None,
                 details=merged if merged else None,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             session.add(log_entry)
             await session.commit()
@@ -47,7 +47,7 @@ async def log_audit_event(
     target_id: str | None = None,
     details: dict[str, Any] | None = None,
     ip_address: str | None = None,
-):
+) -> None:
     entry_details = dict(details or {})
     if ip_address:
         entry_details["ip_address"] = ip_address
@@ -79,7 +79,7 @@ async def get_audit_logs(
     target_type: str | None = None,
     limit: int = 100,
     offset: int = 0,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict[str, Any]], int]:
     from sqlalchemy import func
 
     async with session_scope(async_session_factory) as session:

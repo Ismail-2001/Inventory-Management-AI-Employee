@@ -1,9 +1,11 @@
 import asyncio
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from agent.auth import verify_api_key
+from agent.models import Merchant
 from api.rate_limit import limiter
 from shared.task_queue import task_queue
 
@@ -12,7 +14,7 @@ router = APIRouter()
 
 @router.post("/api/v1/run-sync")
 @limiter.limit("5/minute")
-async def run_sync(request: Request, merchant=Depends(verify_api_key)):
+async def run_sync(request: Request, merchant: Merchant = Depends(verify_api_key)) -> dict[str, Any]:
     """Trigger the full inventory agent pipeline (synchronous).
 
     The graph runs synchronously: sync → forecast → risk → po_draft → notify_pending.
@@ -28,7 +30,7 @@ async def run_sync(request: Request, merchant=Depends(verify_api_key)):
             ),
             timeout=120.0,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise HTTPException(status_code=504, detail="Graph execution timed out")
 
     pending_pos = result.get("purchase_orders", [])
@@ -45,7 +47,7 @@ async def run_sync(request: Request, merchant=Depends(verify_api_key)):
 
 @router.post("/api/v1/run-sync-async")
 @limiter.limit("10/minute")
-async def run_sync_async(request: Request, merchant=Depends(verify_api_key)):
+async def run_sync_async(request: Request, merchant: Merchant = Depends(verify_api_key)) -> dict[str, Any]:
     """Trigger the inventory agent pipeline (async/background).
 
     Returns immediately with a task_id (HTTP 202). Poll /api/v1/tasks/{task_id}
@@ -65,7 +67,7 @@ async def run_sync_async(request: Request, merchant=Depends(verify_api_key)):
 
 
 @router.get("/api/v1/tasks/{task_id}")
-async def get_task_result(task_id: str, merchant=Depends(verify_api_key)):
+async def get_task_result(task_id: str, merchant: Merchant = Depends(verify_api_key)) -> dict[str, Any]:
     """Poll the result of an async pipeline run."""
     result = task_queue.get_result(task_id)
     if result is None:

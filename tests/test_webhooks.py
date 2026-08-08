@@ -1,5 +1,5 @@
+
 import pytest
-from types import SimpleNamespace
 
 from agent import webhooks
 

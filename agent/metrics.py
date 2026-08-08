@@ -1,16 +1,20 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
+from typing import Any
 
-from sqlalchemy import select, func
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agent.db import async_session_factory as _default_factory
 from agent.models import POStatus, PurchaseOrder
+
+SessionFactory = async_sessionmaker[AsyncSession]
 
 
 async def calculate_acceptance_rate(
     merchant_id: int = 0,
     since: date | None = None,
-    session_factory=None,
-) -> dict:
+    session_factory: SessionFactory | None = None,
+) -> dict[str, Any]:
     if since is None:
         since = date.today() - timedelta(days=30)
 
@@ -47,7 +51,7 @@ async def calculate_acceptance_rate(
     }
 
 
-async def calculate_forecast_error_summary(since: date | None = None, session_factory=None) -> dict | None:
+async def calculate_forecast_error_summary(since: date | None = None, session_factory: SessionFactory | None = None) -> dict[str, Any] | None:
     from agent.models import POOutcome
 
     if since is None:

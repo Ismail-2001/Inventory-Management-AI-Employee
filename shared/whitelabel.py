@@ -5,9 +5,7 @@ Serves branding via API and injects into frontend via /api/v1/config.
 """
 import logging
 from dataclasses import dataclass
-from typing import Optional
-
-from sqlalchemy import select
+from typing import Any
 
 from agent.db import async_session_factory, session_scope
 from agent.models import Merchant
@@ -58,7 +56,7 @@ async def get_branding(merchant_id: int) -> MerchantBranding:
         return branding
 
 
-async def update_branding(merchant_id: int, branding_data: dict) -> MerchantBranding:
+async def update_branding(merchant_id: int, branding_data: dict[str, Any]) -> MerchantBranding:
     async with session_scope(async_session_factory) as session:
         merchant = await session.get(Merchant, merchant_id)
         if not merchant:
@@ -73,14 +71,14 @@ async def update_branding(merchant_id: int, branding_data: dict) -> MerchantBran
     return await get_branding(merchant_id)
 
 
-def get_branding_for_domain(domain: str) -> Optional[int]:
+def get_branding_for_domain(domain: str) -> int | None:
     for merchant_id, branding in _BRANDING_CACHE.items():
         if branding.custom_domain == domain:
             return merchant_id
     return None
 
 
-def clear_branding_cache(merchant_id: int | None = None):
+def clear_branding_cache(merchant_id: int | None = None) -> None:
     if merchant_id:
         _BRANDING_CACHE.pop(merchant_id, None)
     else:

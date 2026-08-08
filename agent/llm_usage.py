@@ -1,7 +1,7 @@
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from agent.config import settings
 from agent.db import async_session_factory
@@ -40,7 +40,7 @@ async def log_llm_call(node_name: str, response: str | None, prompt: str | None 
 
 
 async def get_daily_spend_total(node_name: str | None = None) -> float:
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     async with async_session_factory() as session:
         query = select(func.coalesce(func.sum(LlmUsage.estimated_cost), 0.0)).where(LlmUsage.created_at >= today_start)
         if node_name:

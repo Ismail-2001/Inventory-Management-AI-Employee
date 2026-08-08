@@ -10,13 +10,12 @@ import os
 import uuid
 
 import pytest
-from sqlalchemy import select, func, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from agent.config import settings
 from agent.db import async_session_factory, engine
 from agent.models import Forecast, Merchant, PurchaseOrder, RiskAlert, Sku, Supplier
-
 
 pytestmark = [
     pytest.mark.skipif(
@@ -90,6 +89,7 @@ async def test_full_pipeline_creates_forecasts_risk_alerts_and_pos(seeded_sku):
     """Run the full sync → forecast → risk → po_draft pipeline and verify every
     state key is populated.  This is the same flow as POST /api/v1/run-sync."""
     from langgraph.checkpoint.memory import MemorySaver
+
     from agent.graph import build_graph
 
     graph = build_graph().compile(checkpointer=MemorySaver())
@@ -130,6 +130,7 @@ async def test_db_records_persisted_correctly(seeded_sku):
     """Verify that records written inside graph nodes are queryable from the DB
     after the run completes."""
     from langgraph.checkpoint.memory import MemorySaver
+
     from agent.graph import build_graph
 
     graph = build_graph().compile(checkpointer=MemorySaver())
@@ -152,6 +153,7 @@ async def test_no_duplicate_pos_on_concurrent_runs(seeded_sku):
     """Two back-to-back invocations should not create duplicate POs for the same
     SKU within the dedup window."""
     from langgraph.checkpoint.memory import MemorySaver
+
     from agent.graph import build_graph
 
     graph = build_graph().compile(checkpointer=MemorySaver())

@@ -1,4 +1,3 @@
-import pytest
 from agent.risk import determine_risk_level
 
 

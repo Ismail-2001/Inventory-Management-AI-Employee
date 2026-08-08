@@ -1,32 +1,33 @@
 """Usage metrics and dashboard endpoints for monitoring and monetization."""
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
-from sqlalchemy.orm import aliased
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.auth import verify_api_key
 from agent.db import async_session_factory, async_session_factory_readonly
 from agent.models import (
     Forecast,
     LlmUsage,
+    Merchant,
     POStatus,
     PurchaseOrder,
     RiskAlert,
     Sku,
-    AuditLog,
 )
 
 router = APIRouter()
 
 
-def _session():
+def _session() -> AsyncSession:
     factory = async_session_factory_readonly or async_session_factory
     return factory()
 
 
 @router.get("/api/v1/usage/summary")
-async def usage_summary(merchant=Depends(verify_api_key)):
+async def usage_summary(merchant: Merchant = Depends(verify_api_key)) -> dict[str, Any]:
     """Aggregate usage metrics for the current merchant."""
     today = date.today()
     week_ago = today - timedelta(days=7)
@@ -85,9 +86,9 @@ async def usage_summary(merchant=Depends(verify_api_key)):
 
 
 @router.get("/api/v1/usage/daily")
-async def usage_daily(days: int = 14, merchant=Depends(verify_api_key)):
+async def usage_daily(days: int = 14, merchant: Merchant = Depends(verify_api_key)) -> dict[str, Any]:
     """Time-series of daily usage for charting."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     merchant_filter = merchant.id if merchant.id else None
 
     async with _session() as session:

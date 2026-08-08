@@ -7,21 +7,19 @@ Endpoints:
     POST /api/v1/auth/sso/logout     — Invalidate session
     GET  /api/v1/auth/sso/me         — Get current user from session token
 """
-import json
 import logging
+from typing import Any
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from agent.auth import _hexdigest
-from agent.config import settings
 from agent.db import async_session_factory, session_scope
 from agent.models import Merchant, User
 from agent.sso import (
-    SSOProvider,
     get_sso_providers,
     get_sso_session,
     oidc_exchange_code,
@@ -58,7 +56,7 @@ class SSOProviderResponse(BaseModel):
 
 
 @router.get("/providers", response_model=list[SSOProviderResponse])
-async def list_sso_providers():
+async def list_sso_providers() -> list[SSOProviderResponse]:
     providers = get_sso_providers()
     if not providers:
         return []
@@ -73,7 +71,7 @@ async def list_sso_providers():
 
 
 @router.get("/login")
-async def sso_login(provider: str = ""):
+async def sso_login(provider: str = "") -> Any:
     providers = get_sso_providers()
     if not providers:
         raise HTTPException(status_code=404, detail="SSO not configured")
@@ -108,7 +106,7 @@ async def sso_login(provider: str = ""):
 
 
 @router.post("/callback")
-async def sso_callback(request: Request, body: SSOCallbackRequest):
+async def sso_callback(request: Request, body: SSOCallbackRequest) -> SSOSessionResponse:
     providers = get_sso_providers()
     provider = None
     if body.provider:
@@ -151,7 +149,7 @@ async def sso_callback(request: Request, body: SSOCallbackRequest):
 
 
 @router.post("/logout")
-async def sso_logout(x_session_token: str = Header(None)):
+async def sso_logout(x_session_token: str = Header(None)) -> dict[str, Any]:
     if not x_session_token:
         return {"ok": True}
     sso_session = get_sso_session()
@@ -162,7 +160,7 @@ async def sso_logout(x_session_token: str = Header(None)):
 
 
 @router.get("/me")
-async def sso_me(x_session_token: str = Header(None)):
+async def sso_me(x_session_token: str = Header(None)) -> dict[str, Any]:
     if not x_session_token:
         raise HTTPException(status_code=401, detail="Missing session token")
 
@@ -184,7 +182,7 @@ def _generate_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-async def _find_or_create_sso_user(email: str, userinfo: dict) -> tuple[Merchant, User]:
+async def _find_or_create_sso_user(email: str, userinfo: dict[str, Any]) -> tuple[Merchant, User]:
     async with session_scope(async_session_factory) as session:
         result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
@@ -197,10 +195,10 @@ async def _find_or_create_sso_user(email: str, userinfo: dict) -> tuple[Merchant
         domain = email.split("@")[-1]
         merchant_name = domain.split(".")[0].title()
 
-        result = await session.execute(
+        merchant_result = await session.execute(
             select(Merchant).where(Merchant.name == merchant_name).limit(1)
         )
-        merchant = result.scalar_one_or_none()
+        merchant = merchant_result.scalar_one_or_none()
 
         if not merchant:
             import secrets as _secrets

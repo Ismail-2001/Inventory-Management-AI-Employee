@@ -1,14 +1,14 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from agent.db import async_session_factory
 from agent.models import POOutcome, PurchaseOrder, SalesHistory, Sku
 
 
-async def evaluate_pending_outcomes():
+async def evaluate_pending_outcomes() -> int:
     evaluated = 0
-    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+    cutoff = datetime.now(UTC) - timedelta(days=1)
 
     async with async_session_factory() as session:
         result = await session.execute(
@@ -33,8 +33,11 @@ async def evaluate_pending_outcomes():
                 continue
 
             lead_time_days = getattr(sku, 'lead_time_days', None) or 7
-            expected_delivery = po.approved_at + timedelta(days=lead_time_days)
-            if expected_delivery > datetime.now(timezone.utc):
+            approved_at = po.approved_at
+            if approved_at is None:
+                continue
+            expected_delivery = approved_at + timedelta(days=lead_time_days)
+            if expected_delivery > datetime.now(UTC):
                 continue
 
             delivery_date = expected_delivery.date()
@@ -81,7 +84,7 @@ async def evaluate_pending_outcomes():
                 actual_stock_at_delivery=sku.current_stock,
                 actual_stockout_occurred=stockout,
                 forecast_error_pct=round(error_pct, 1),
-                evaluated_at=datetime.now(timezone.utc),
+                evaluated_at=datetime.now(UTC),
             )
             session.add(outcome)
             await session.commit()

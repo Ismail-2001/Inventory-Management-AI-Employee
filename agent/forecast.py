@@ -1,7 +1,6 @@
-from typing import List
 
 
-def exponential_smoothing(values: List[float], alpha: float = 0.3) -> float:
+def exponential_smoothing(values: list[float], alpha: float = 0.3) -> float:
     if not values:
         return 0.0
     smoothed = values[0]

@@ -6,8 +6,7 @@ S3 API via REST: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-str
 import hashlib
 import hmac
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import select
@@ -17,10 +16,10 @@ from agent.db import async_session_factory
 from agent.models import AuditLog
 
 
-def _s3_sign(method: str, path: str, headers: dict, body: bytes, region: str, bucket: str, access_key: str, secret_key: str) -> tuple[str, dict]:
+def _s3_sign(method: str, path: str, headers: dict[str, str], body: bytes, region: str, bucket: str, access_key: str, secret_key: str) -> tuple[str, dict[str, str]]:
     """Minimal AWS Signature V4 signing for S3 PUT."""
     service = "s3"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     amz_date = now.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = now.strftime("%Y%m%d")
 
@@ -57,7 +56,7 @@ async def export_audit_logs_to_s3() -> int:
     if not settings.audit_s3_bucket or not settings.audit_s3_access_key:
         return 0
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
     async with async_session_factory() as session:
         result = await session.execute(
             select(AuditLog).where(AuditLog.created_at >= cutoff)

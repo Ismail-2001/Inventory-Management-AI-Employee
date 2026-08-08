@@ -1,12 +1,13 @@
+from datetime import UTC, datetime
+from unittest.mock import patch
+
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from agent import audit_export as export_module
 
 
 def test_s3_sign_returns_amz_date_and_headers():
-    now = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
     with patch("agent.audit_export.datetime") as mock_dt:
         mock_dt.now.return_value = now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -30,7 +31,7 @@ def test_s3_sign_returns_amz_date_and_headers():
 
 
 def test_s3_sign_deterministic():
-    now = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
     with patch("agent.audit_export.datetime") as mock_dt:
         mock_dt.now.return_value = now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)

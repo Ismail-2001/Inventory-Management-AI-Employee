@@ -1,9 +1,9 @@
-import pytest
-from fastapi import HTTPException
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from agent import security as security_module
-from agent.models import Merchant
 
 
 class FakeResult:

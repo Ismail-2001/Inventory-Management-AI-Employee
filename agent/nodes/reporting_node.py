@@ -1,7 +1,8 @@
-from datetime import date, datetime, timedelta, timezone
 import logging
+from datetime import date, timedelta
+from typing import Any
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from agent.audit import log
 from agent.config import settings
@@ -12,7 +13,7 @@ from shared.slack import send_slack
 logger = logging.getLogger(__name__)
 
 
-async def run_reporting(week_start: date, insights: list[dict]) -> str:
+async def run_reporting(week_start: date, insights: list[dict[str, Any]]) -> str:
     week_end = week_start + timedelta(days=7)
 
     async with async_session_factory() as session:
@@ -55,12 +56,12 @@ async def run_reporting(week_start: date, insights: list[dict]) -> str:
     lines = [
         f"Weekly Inventory Digest ({week_start.isoformat()} to {week_end.isoformat()})",
         f"{'=' * 50}",
-        f"",
-        f"Summary:",
+        "",
+        "Summary:",
         f"  Risk alerts this week: {alert_count} ({critical_count} critical)",
         f"  POs drafted:          {po_count}",
         f"  POs pending approval: {pending_count}",
-        f"",
+        "",
     ]
 
     if insights:

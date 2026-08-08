@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
+from typing import Any
 
 from agent.audit import log
 from agent.config import settings
@@ -9,9 +10,9 @@ from agent.metrics import calculate_acceptance_rate, calculate_forecast_error_su
 from agent.models import ReflectionInsight
 
 
-def _template_insight(acceptance: dict, forecast: dict | list) -> str:
+def _template_insight(acceptance: dict[str, Any], forecast: dict[str, Any] | list[Any]) -> str:
     lines = [
-        f"Weekly Reflection:",
+        "Weekly Reflection:",
         f"  Acceptance: {acceptance['accepted_as_is_pct']}% as-is, "
         f"{acceptance['edited_then_approved_pct']}% edited, "
         f"{acceptance['rejected_pct']}% rejected ({acceptance['total']} total POs).",
@@ -24,7 +25,7 @@ def _template_insight(acceptance: dict, forecast: dict | list) -> str:
     return "\n".join(lines)
 
 
-async def _generate_insight(acceptance: dict, forecast: dict | list) -> str:
+async def _generate_insight(acceptance: dict[str, Any], forecast: dict[str, Any] | list[Any]) -> str:
     if not settings.openai_api_key and not settings.google_api_key and not settings.groq_api_key:
         return _template_insight(acceptance, forecast)
 
@@ -62,18 +63,19 @@ async def _generate_insight(acceptance: dict, forecast: dict | list) -> str:
     return _template_insight(acceptance, forecast)
 
 
-async def run_reflection(week_start: date) -> list[dict]:
+async def run_reflection(week_start: date) -> list[dict[str, Any]]:
     week_end = week_start + timedelta(days=7)
     acceptance = await calculate_acceptance_rate(since=week_start)
     forecast = await calculate_forecast_error_summary(since=week_start)
+    forecast_for_insight: dict[str, Any] = forecast if forecast is not None else {}
 
-    insight_text = await _generate_insight(acceptance, forecast)
+    insight_text = await _generate_insight(acceptance, forecast_for_insight)
 
     async with async_session_factory() as session:
         ri = ReflectionInsight(
             week_start=week_start,
             insight_text=insight_text,
-            supporting_data={"acceptance": acceptance, "forecast": forecast} if isinstance(forecast, dict) else {"acceptance": acceptance},
+            supporting_data={"acceptance": acceptance, "forecast": forecast_for_insight} if forecast_for_insight else {"acceptance": acceptance},
         )
         session.add(ri)
         await session.commit()
@@ -84,5 +86,5 @@ async def run_reflection(week_start: date) -> list[dict]:
         "week_start": week_start.isoformat(),
         "insight_text": insight_text,
         "acceptance": acceptance,
-        "forecast": forecast if isinstance(forecast, dict) else {},
+        "forecast": forecast_for_insight,
     }]

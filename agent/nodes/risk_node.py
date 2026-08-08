@@ -1,3 +1,5 @@
+from typing import Any
+
 from agent.db import async_session_factory
 from agent.models import RiskAlert
 from agent.risk import determine_risk_level
@@ -5,7 +7,7 @@ from agent.telemetry import trace_node
 
 
 @trace_node("risk")
-async def risk_node(state: dict) -> dict:
+async def risk_node(state: dict[str, Any]) -> dict[str, Any]:
     forecasts = state.get("forecasts", [])
     skus_map = {s["id"]: s for s in state.get("skus", [])}
 

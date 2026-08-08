@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import time
-from typing import Optional
+from typing import Any
 
 from agent.config import settings
 
@@ -24,7 +24,7 @@ def sign_token(po_id: int, action: str, ttl_seconds: int = 14400) -> str:
     return f"{msg}:{sig}"
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> dict[str, Any] | None:
     try:
         parts = token.split(":")
         if len(parts) != 4:

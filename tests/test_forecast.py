@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from agent.forecast import exponential_smoothing
 from agent.nodes.forecast_node import calculate_forecast
 

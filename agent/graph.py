@@ -1,4 +1,7 @@
+from typing import Any
+
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from agent.db import create_checkpointer
 from agent.nodes.forecast_node import forecast_node
@@ -22,7 +25,7 @@ def build_graph() -> StateGraph:
     workflow.add_edge("sync", "forecast")
     workflow.add_edge("forecast", "risk")
 
-    def has_risk_alerts(state: dict) -> str:
+    def has_risk_alerts(state: dict[str, Any]) -> str:
         alerts = state.get("risk_alerts", [])
         return "po_draft" if alerts else END
 
@@ -38,7 +41,7 @@ def build_graph() -> StateGraph:
     return workflow
 
 
-async def get_compiled_graph():
+async def get_compiled_graph() -> CompiledStateGraph:
     checkpointer = create_checkpointer()
     graph = build_graph()
     return graph.compile(checkpointer=checkpointer, interrupt_after=["notify_pending"])

@@ -14,11 +14,11 @@ from agent.config import settings
 
 logger = logging.getLogger(__name__)
 
-_redis_client = None
+_redis_client: Any = None
 _redis_available = False
 
 
-def _get_redis():
+def _get_redis() -> Any | None:
     global _redis_client, _redis_available
     if _redis_client is not None:
         return _redis_client
@@ -44,7 +44,7 @@ def _get_redis():
 class RedisCache:
     """TTL cache backed by Redis with in-memory fallback."""
 
-    def __init__(self, namespace: str = "inventory", ttl_seconds: int = 3600, max_size: int = 1000):
+    def __init__(self, namespace: str = "inventory", ttl_seconds: int = 3600, max_size: int = 1000) -> None:
         self._namespace = namespace
         self._ttl = ttl_seconds
         self._max_size = max_size
@@ -109,7 +109,8 @@ class RedisCache:
         if r is None:
             return False
         try:
-            return await r.ping()
+            result = await r.ping()
+            return bool(result)
         except Exception:
             return False
 
@@ -137,7 +138,7 @@ class RedisCache:
             self._fallback.popitem(last=False)
 
 
-async def close_redis():
+async def close_redis() -> None:
     global _redis_client, _redis_available
     if _redis_client is not None:
         try:

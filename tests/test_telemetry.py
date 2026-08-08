@@ -1,6 +1,5 @@
+
 import pytest
-from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 from agent import telemetry as telemetry_module
 

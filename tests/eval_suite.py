@@ -6,7 +6,6 @@ This suite replays historical sales data through the forecast function
 and compares predicted vs actual to calculate MAPE.
 If MAPE exceeds threshold (default 30%), the build fails.
 """
-import math
 
 import pytest
 
@@ -76,7 +75,8 @@ def test_forecast_accuracy(case):
 
 @pytest.mark.skip(reason="Requires DB — run against real historical data in CI")
 async def test_historical_backtest():
-    from sqlalchemy import select, func
+    from sqlalchemy import select
+
     from agent.db import async_session_factory
     from agent.models import POOutcome
 

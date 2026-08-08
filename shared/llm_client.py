@@ -9,19 +9,18 @@ Structured error handling.
 Cost tracking.
 """
 
-import os
-import json
 import asyncio
+import json
+import os
 import random
 import re
 import secrets
 import time
-from typing import Dict, List, Optional, Any, TypeVar, Type
-from dataclasses import dataclass, field
-from pydantic import BaseModel
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 import httpx
-
+from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -51,7 +50,7 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 class CircuitBreaker:
-    def __init__(self, threshold: int = 5, recovery_timeout: float = 60.0):
+    def __init__(self, threshold: int = 5, recovery_timeout: float = 60.0) -> None:
         self.threshold = threshold
         self.recovery_timeout = recovery_timeout
         self._failures = 0
@@ -66,11 +65,11 @@ class CircuitBreaker:
             return True
         return False
 
-    def success(self):
+    def success(self) -> None:
         self._failures = 0
         self._open_until = 0.0
 
-    def failure(self):
+    def failure(self) -> None:
         self._failures += 1
 
 
@@ -95,7 +94,7 @@ class LLMClient:
         max_tokens: int = 1024,
         timeout: float = 30.0,
         max_retries: int = 3,
-        circuit_breaker: Optional[CircuitBreaker] = None,
+        circuit_breaker: CircuitBreaker | None = None,
     ):
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -128,10 +127,10 @@ class LLMClient:
         limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
         self._client = httpx.AsyncClient(timeout=timeout, limits=limits)
 
-    async def close(self):
+    async def close(self) -> None:
         await self._client.aclose()
 
-    async def call(self, user_prompt: str, response_model: Optional[Type[T]] = None) -> LLMResult:
+    async def call(self, user_prompt: str, response_model: type[T] | None = None) -> LLMResult:
         if self.circuit_breaker.is_open:
             raise RuntimeError("Circuit breaker is open — LLM unavailable, using rule-based fallback")
 
@@ -198,7 +197,8 @@ class LLMClient:
         r.raise_for_status()
         data = r.json()
         try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return str(text)
         except (KeyError, IndexError) as exc:
             raise RuntimeError(f"Gemini response missing expected structure: {data}") from exc
 
@@ -217,16 +217,20 @@ class LLMClient:
         r.raise_for_status()
         data = r.json()
         try:
-            return data["choices"][0]["message"]["content"]
+            text = data["choices"][0]["message"]["content"]
+            return str(text)
         except (KeyError, IndexError) as exc:
             raise RuntimeError(f"OpenAI response missing expected structure: {data}") from exc
 
-    def _extract_json(self, text: str) -> Optional[Dict]:
+    def _extract_json(self, text: str) -> dict[str, Any] | None:
         try:
             if "```json" in text:
-                return json.loads(text.split("```json")[1].split("```")[0])
+                data = json.loads(text.split("```json")[1].split("```")[0])
+                return data if isinstance(data, dict) else None
             if "```" in text:
-                return json.loads(text.split("```")[1].split("```")[0])
-            return json.loads(text)
+                data = json.loads(text.split("```")[1].split("```")[0])
+                return data if isinstance(data, dict) else None
+            data = json.loads(text)
+            return data if isinstance(data, dict) else None
         except (json.JSONDecodeError, IndexError):
             return None

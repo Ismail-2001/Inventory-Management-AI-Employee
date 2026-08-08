@@ -1,13 +1,12 @@
 """Tests for SSO, Audit, and White-Label Enterprise Features."""
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from types import SimpleNamespace
 
-from agent.sso import SSOSession, validate_email_domain, get_sso_providers
-from agent.audit import log, log_audit_event, get_audit_logs
+from agent.audit import log, log_audit_event
 from agent.config import settings
-from shared.whitelabel import MerchantBranding, get_branding, clear_branding_cache
-
+from agent.sso import SSOSession, get_sso_providers, validate_email_domain
+from shared.whitelabel import MerchantBranding, clear_branding_cache
 
 # ── SSO Session Token Tests ──────────────────────────────────────────
 

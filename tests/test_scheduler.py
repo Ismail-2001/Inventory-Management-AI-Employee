@@ -1,6 +1,6 @@
+from unittest.mock import AsyncMock
+
 import pytest
-import os
-from unittest.mock import patch, AsyncMock
 
 from agent import scheduler as scheduler_module
 

@@ -1,6 +1,7 @@
-import pytest
-from datetime import date, timedelta
+from datetime import date
 from types import SimpleNamespace
+
+import pytest
 
 from agent import metrics as metrics_module
 from agent.models import POStatus

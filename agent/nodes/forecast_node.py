@@ -1,7 +1,8 @@
 import asyncio
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from agent.db import async_session_factory
 from agent.forecast import exponential_smoothing
@@ -60,14 +61,14 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
 
 
 @trace_node("forecast")
-async def forecast_node(state: dict) -> dict:
+async def forecast_node(state: dict[str, Any]) -> dict[str, Any]:
     skus = state.get("skus", [])
 
-    async def _forecast_one(sku: dict) -> dict | None:
+    async def _forecast_one(sku: dict[str, Any]) -> dict[str, Any] | None:
         cache_key = f"forecast:{sku['id']}"
         cached = await forecast_cache.get(cache_key)
         if cached is not None:
-            return cached
+            return dict(cached)
 
         try:
             fr = await asyncio.wait_for(
@@ -85,7 +86,7 @@ async def forecast_node(state: dict) -> dict:
             }
             await forecast_cache.set(cache_key, result)
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     results = [r for r in await asyncio.gather(*[_forecast_one(s) for s in skus]) if r is not None]

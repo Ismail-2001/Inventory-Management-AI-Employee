@@ -4,12 +4,11 @@ Validates that each handler correctly processes known Shopify payloads and
 produces the expected side effects (DB upserts). These are pure unit tests —
 all external dependencies (HTTP, Shopify API) are mocked.
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from datetime import date
 
 from agent import webhooks
-
 
 ORDER_PAYLOAD = {
     "id": 1001,

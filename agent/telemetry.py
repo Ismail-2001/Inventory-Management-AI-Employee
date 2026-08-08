@@ -1,30 +1,36 @@
 import os
 import time
+from collections.abc import Callable, Sequence
 from functools import wraps
+from typing import Any, TypeVar
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    SpanExporter,
+    SpanExportResult,
+)
 
-from agent.config import settings
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class _NoOpExporter(SpanExporter):
-    def export(self, spans):
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         return SpanExportResult.SUCCESS
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         pass
 
-    def force_flush(self, timeout_millis: int = 30000):
-        pass
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
 
 
-_tracer = None
+_tracer: Any | None = None
 
 
-def setup_telemetry():
+def setup_telemetry() -> None:
     global _tracer
     if _tracer is not None:
         return
@@ -47,22 +53,23 @@ def setup_telemetry():
     _tracer = trace.get_tracer(__name__)
 
 
-def get_tracer():
+def get_tracer() -> Any:
+    global _tracer
     if _tracer is None:
         setup_telemetry()
     return _tracer
 
 
-def trace_node(name: str):
-    def decorator(func):
+def trace_node(name: str) -> Callable[[F], F]:
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(state: dict) -> dict:
+        async def wrapper(state: dict[str, Any]) -> dict[str, Any]:
             tracer = get_tracer()
             start = time.perf_counter()
             with tracer.start_as_current_span(name) as span:
                 span.set_attribute("node.name", name)
                 try:
-                    result = await func(state)
+                    result: dict[str, Any] = await func(state)
                     span.set_attribute("node.success", True)
                     span.set_attribute("node.duration_ms", round((time.perf_counter() - start) * 1000, 1))
                     span.set_attribute(
@@ -76,16 +83,16 @@ def trace_node(name: str):
                     span.record_exception(e)
                     raise
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
 
 class RequestTracingMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return

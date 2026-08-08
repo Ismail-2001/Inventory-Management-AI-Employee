@@ -3,47 +3,48 @@ Inventory Agent — Production API Server
 Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 """
 
-import os
-import uuid
-import time
 import asyncio
-import signal
 import logging
+import os
+import signal
+import time
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.responses import JSONResponse, Response
 
 from agent.db import close_checkpointer, create_checkpointer
 from agent.graph import build_graph
-
-from slowapi import _rate_limit_exceeded_handler
-from shared.task_queue import task_queue
-from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse
-
 from shared.log_config import configure_logging
+from shared.task_queue import task_queue
+
 configure_logging()
 
 from agent.telemetry import setup_telemetry
+
 setup_telemetry()
 
-from opentelemetry import trace
-from api.rate_limit import limiter, _get_tier_limit, add_rate_limit_headers
-from agent.inventory_agent import agent, InventoryItem, InventoryAnalysis, BulkAnalysisRequest, BulkAnalysisResponse
+from agent.auth import verify_api_key
+from agent.config import settings
+from agent.inventory_agent import BulkAnalysisRequest, BulkAnalysisResponse, InventoryAnalysis, InventoryItem, agent
+from api.rate_limit import _get_tier_limit, limiter
 from api.routes.operations import router as ops_router
 from api.routes.purchase_orders import router as po_router
 from api.routes.run_sync import router as run_sync_router
 from api.routes.webhooks import router as webhooks_router
-from agent.auth import verify_api_key
-from agent.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-_dev_notifications: list[dict] = []
+_dev_notifications: list[dict[str, Any]] = []
 
 
 def _get_provider() -> str:
@@ -57,7 +58,7 @@ def _get_provider() -> str:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.validate_required()
 
     app.state.checkpointer = create_checkpointer()
@@ -79,13 +80,13 @@ async def lifespan(app: FastAPI):
     _inflight = {"count": 0}
     _original_handler = signal.getsignal(signal.SIGTERM)
 
-    async def _graceful_shutdown():
+    async def _graceful_shutdown() -> None:
         logger.info("Graceful shutdown initiated — draining in-flight requests")
         _shutdown_event.set()
 
     loop = asyncio.get_running_loop()
 
-    def _signal_handler():
+    def _signal_handler() -> None:
         loop.create_task(_graceful_shutdown())
 
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -134,12 +135,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 from starlette.middleware.base import BaseHTTPMiddleware
-from passlib.hash import bcrypt
-from agent.models import Merchant, MerchantTier
+
 from agent.config import settings as _cfg
+from agent.models import Merchant, MerchantTier
+
+_tier_cache: Any = None
+_tier_cache_dict: Any = None
 
 if _cfg.redis_url:
     try:
@@ -153,14 +163,14 @@ else:
 
 if _tier_cache is None:
     from collections import OrderedDict
-    _tier_cache_dict: OrderedDict[str, MerchantTier] = OrderedDict()
+    _tier_cache_dict = OrderedDict()
 else:
     _tier_cache_dict = None
 
 _TIER_CACHE_MAX = 200
 
 class TierLookupMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or ""
         if api_key:
             prefix = api_key[:8]
@@ -170,8 +180,9 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                     request.state.merchant_tier = MerchantTier(cached) if isinstance(cached, str) else cached
                 elif prefix:
                     try:
-                        from agent.db import async_session_factory
                         from sqlalchemy import select
+
+                        from agent.db import async_session_factory
                         async with async_session_factory() as session:
                             result = await session.execute(
                                 select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
@@ -190,8 +201,9 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                     request.state.merchant_tier = cached
                 elif prefix:
                     try:
-                        from agent.db import async_session_factory
                         from sqlalchemy import select
+
+                        from agent.db import async_session_factory
                         async with async_session_factory() as session:
                             result = await session.execute(
                                 select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
@@ -211,7 +223,7 @@ app.add_middleware(TierLookupMiddleware)
 
 
 @app.post("/api/v1/dev-webhook")
-async def dev_webhook(request: Request):
+async def dev_webhook(request: Request) -> dict[str, Any]:
     if settings.environment == "production":
         raise HTTPException(status_code=404, detail="Not found")
     body = await request.json()
@@ -222,15 +234,15 @@ async def dev_webhook(request: Request):
 
 
 @app.get("/api/v1/dev-webhook")
-async def dev_webhook_log():
+async def dev_webhook_log() -> list[dict[str, Any]]:
     if settings.environment == "production":
         raise HTTPException(status_code=404, detail="Not found")
     return _dev_notifications
 
 
 @app.get("/api/v1/config")
-async def frontend_config():
-    result = {}
+async def frontend_config() -> dict[str, Any]:
+    result: dict[str, Any] = {}
     if settings.environment == "production":
         result["auth_mode"] = "proxy"
     else:
@@ -249,8 +261,8 @@ async def frontend_config():
 
 
 @app.get("/health")
-async def health(request: Request):
-    result = {
+async def health(request: Request) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "status": "healthy",
         "agent": "inventory",
         "version": "1.0.0",
@@ -287,7 +299,7 @@ async def health(request: Request):
     return result
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
@@ -298,17 +310,23 @@ app.include_router(po_router)
 app.include_router(webhooks_router)
 app.include_router(ops_router)
 from api.routes.keys import router as keys_router
+
 app.include_router(keys_router)
 from api.routes.usage import router as usage_router
+
 app.include_router(usage_router)
 from api.routes.audit import router as audit_router
+
 app.include_router(audit_router)
 from api.routes.sso import router as sso_router
+
 app.include_router(sso_router)
 from api.routes.branding import router as branding_router
+
 app.include_router(branding_router)
 
 from shared.metrics import setup_metrics
+
 setup_metrics(app)
 
 app.add_middleware(
@@ -320,15 +338,16 @@ app.add_middleware(
 )
 
 from agent.telemetry import RequestTracingMiddleware
-app.add_middleware(RequestTracingMiddleware)
+
+app.add_middleware(RequestTracingMiddleware)  # type: ignore[arg-type]
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, max_bytes: int = 1_048_576):
+    def __init__(self, app: Any, max_bytes: int = 1_048_576) -> None:
         super().__init__(app)
         self.max_bytes = max_bytes
 
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_bytes:
             return JSONResponse(status_code=413, content={"detail": "Request too large"})
@@ -337,15 +356,15 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=1_048_576)
 
 class SecurityHeadersMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: dict[str, Any], receive: Callable[..., Any], send: Callable[..., Any]) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        async def send_wrapper(message):
+        async def send_wrapper(message: dict[str, Any]) -> None:
             if message["type"] == "http.response.start":
                 headers = message.get("headers", [])
                 headers.extend([
@@ -361,14 +380,14 @@ class SecurityHeadersMiddleware:
 
         await self.app(scope, receive, send_wrapper)
 
-app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
 
 
 class CorrelationIdMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: dict[str, Any], receive: Callable[..., Any], send: Callable[..., Any]) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -379,7 +398,7 @@ class CorrelationIdMiddleware:
         start = time.perf_counter()
         status_code = 500
 
-        async def send_wrapper(message):
+        async def send_wrapper(message: dict[str, Any]) -> None:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message.get("status", 500)
@@ -396,31 +415,37 @@ class CorrelationIdMiddleware:
         metrics.inc("http_requests_total", method=method, path=path, status=str(status_code))
         metrics.observe("http_request_duration_seconds", elapsed, method=method, path=path)
 
-app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(CorrelationIdMiddleware)  # type: ignore[arg-type]
 
 
 class InflightTracker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.count = 0
         self._lock = asyncio.Lock()
 
-    async def increment(self):
+    async def increment(self) -> None:
         async with self._lock:
             self.count += 1
+        self._emit()
 
-    async def decrement(self):
+    async def decrement(self) -> None:
         async with self._lock:
             self.count = max(0, self.count - 1)
+        self._emit()
+
+    def _emit(self) -> None:
+        from shared.metrics import metrics
+        metrics.gauge("in_flight_requests", self.count)
 
 
 inflight_tracker = InflightTracker()
 
 
 class InflightMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: dict[str, Any], receive: Callable[..., Any], send: Callable[..., Any]) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -431,7 +456,7 @@ class InflightMiddleware:
         finally:
             await inflight_tracker.decrement()
 
-app.add_middleware(InflightMiddleware)
+app.add_middleware(InflightMiddleware)  # type: ignore[arg-type]
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():
@@ -444,7 +469,7 @@ async def analyze_inventory(
     request: Request,
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
-):
+) -> InventoryAnalysis:
     """
     DEPRECATED: this is the original single-shot demo endpoint, kept only
     because tests/test_agent.py still exercises the underlying agent module.
@@ -477,7 +502,7 @@ async def analyze_bulk(
     request: Request,
     request_body: BulkAnalysisRequest,
     x_api_key: str = Depends(verify_api_key)
-):
+) -> BulkAnalysisResponse:
     """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.analyze_bulk(request_body.items)
@@ -492,7 +517,7 @@ async def forecast_demand(
     request: Request,
     item: InventoryItem,
     x_api_key: str = Depends(verify_api_key)
-):
+) -> dict[str, Any]:
     """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.forecast_demand(item)

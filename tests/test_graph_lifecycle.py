@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import pytest
 from starlette.requests import Request
 
+import agent.scheduler as scheduler_module
 import api.main as api_main
 import api.routes.run_sync as run_sync_module
-import agent.scheduler as scheduler_module
 
 
 def test_startup_initializes_shared_graph_and_checkpointer(monkeypatch):

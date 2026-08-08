@@ -3,12 +3,14 @@ Inventory Agent - AI Employee #2
 Demand Forecasting, Reorder Optimization, Stock Analysis
 """
 
-import os
 import json
+import os
 from datetime import datetime
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field
-from shared.llm_client import LLMClient, CircuitBreaker
+from typing import Any
+
+from pydantic import BaseModel
+
+from shared.llm_client import CircuitBreaker, LLMClient
 
 
 class Config:
@@ -30,11 +32,11 @@ class InventoryItem(BaseModel):
     unit_cost: float = 0
     unit_price: float = 0
     category: str = "general"
-    last_restock_date: Optional[str] = None
+    last_restock_date: str | None = None
     supplier_reliability: float = 0.95
-    reorder_point: Optional[int] = None
-    safety_stock: Optional[int] = None
-    warehouse_capacity: Optional[int] = None
+    reorder_point: int | None = None
+    safety_stock: int | None = None
+    warehouse_capacity: int | None = None
     on_order: int = 0
     backordered: int = 0
 
@@ -53,17 +55,17 @@ class InventoryAnalysis(BaseModel):
     demand_forecast_90d: int
     cost_impact: float
     reasoning: str
-    seasonal_alert: Optional[str] = None
-    supplier_recommendation: Optional[str] = None
+    seasonal_alert: str | None = None
+    supplier_recommendation: str | None = None
 
 
 class BulkAnalysisRequest(BaseModel):
-    items: List[InventoryItem]
+    items: list[InventoryItem]
 
 
 class BulkAnalysisResponse(BaseModel):
-    results: List[InventoryAnalysis]
-    summary: Dict[str, Any]
+    results: list[InventoryAnalysis]
+    summary: dict[str, Any]
 
 
 SYSTEM_PROMPT = """You are an expert Inventory Management AI for ecommerce businesses.
@@ -126,7 +128,7 @@ IMPORTANT RULES:
 class InventoryAgent:
     """AI Inventory Management Agent"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = Config()
         self.llm = LLMClient(
             system_prompt=SYSTEM_PROMPT,
@@ -135,7 +137,7 @@ class InventoryAgent:
             circuit_breaker=CircuitBreaker(threshold=5, recovery_timeout=60),
         )
 
-    async def close(self):
+    async def close(self) -> None:
         await self.llm.close()
 
     async def analyze(self, item: InventoryItem) -> InventoryAnalysis:
@@ -194,7 +196,7 @@ Provide your analysis as JSON.
         except Exception:
             return self._rule_based_fallback(item)
 
-    async def analyze_bulk(self, items: List[InventoryItem]) -> BulkAnalysisResponse:
+    async def analyze_bulk(self, items: list[InventoryItem]) -> BulkAnalysisResponse:
         results = []
         critical_count = 0
         high_count = 0
@@ -225,7 +227,7 @@ Provide your analysis as JSON.
             },
         )
 
-    async def forecast_demand(self, item: InventoryItem) -> Dict:
+    async def forecast_demand(self, item: InventoryItem) -> dict[str, Any]:
         context = f"""
 Forecast demand for this product:
 
@@ -247,7 +249,8 @@ Provide:
             result = await self.llm.call(context)
             if not result.text:
                 raise RuntimeError("Empty LLM response")
-            return json.loads(result.text)
+            data = json.loads(result.text)
+            return data if isinstance(data, dict) else {}
         except Exception:
             return {
                 "next_30_days": int(item.daily_sales * 30),

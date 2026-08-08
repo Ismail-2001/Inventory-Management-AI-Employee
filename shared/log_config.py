@@ -2,10 +2,11 @@ import json
 import logging
 import logging.config
 import sys
+from typing import Any
 
 
 class JSONFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         return json.dumps({
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
@@ -16,7 +17,7 @@ class JSONFormatter(logging.Formatter):
         }, default=str)
 
 
-LOGGING_CONFIG = {
+LOGGING_CONFIG: dict[str, Any] = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
@@ -58,5 +59,5 @@ LOGGING_CONFIG = {
 }
 
 
-def configure_logging():
+def configure_logging() -> None:
     logging.config.dictConfig(LOGGING_CONFIG)

@@ -1,9 +1,10 @@
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from agent import outcomes as outcomes_module
-from agent.models import PurchaseOrder, Sku, POOutcome, SalesHistory
+from agent.models import Sku
 
 
 class FakeResult:
@@ -84,7 +85,7 @@ async def test_evaluate_skips_duplicate_outcome(monkeypatch):
     po = SimpleNamespace(
         id=1,
         status="approved",
-        approved_at=datetime.now(timezone.utc) - timedelta(days=10),
+        approved_at=datetime.now(UTC) - timedelta(days=10),
         sku_id=1,
     )
     session = FakeSession(pos=[po], outcomes=[SimpleNamespace(po_id=1)])
@@ -99,7 +100,7 @@ async def test_evaluate_skips_no_sku(monkeypatch):
     po = SimpleNamespace(
         id=1,
         status="approved",
-        approved_at=datetime.now(timezone.utc) - timedelta(days=10),
+        approved_at=datetime.now(UTC) - timedelta(days=10),
         sku_id=1,
     )
     session = FakeSession(pos=[po], outcomes=[], sku=None)
@@ -114,7 +115,7 @@ async def test_evaluate_creates_outcome(monkeypatch):
     po = SimpleNamespace(
         id=1,
         status="approved",
-        approved_at=datetime.now(timezone.utc) - timedelta(days=20),
+        approved_at=datetime.now(UTC) - timedelta(days=20),
         sku_id=1,
     )
     sku = SimpleNamespace(id=1, current_stock=5)

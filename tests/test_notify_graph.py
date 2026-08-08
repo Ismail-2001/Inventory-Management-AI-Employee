@@ -70,11 +70,12 @@ async def test_full_graph_returns_all_expected_state_keys():
     the final state dict — catching any node that returns only ``{new_key: …}``
     instead of ``{**state, new_key: …}``.
     """
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, patch
+
+    from langgraph.checkpoint.memory import MemorySaver
 
     from agent.graph import get_compiled_graph
     from agent.nodes.forecast_node import ForecastResult
-    from langgraph.checkpoint.memory import MemorySaver
 
     # ── domain stubs ──────────────────────────────────────────────
 

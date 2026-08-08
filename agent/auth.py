@@ -1,6 +1,8 @@
 import hmac as hmac_mod
+from collections.abc import Callable
+from typing import Any
 
-from fastapi import Depends, HTTPException, Header, Request
+from fastapi import Depends, Header, HTTPException, Request
 from passlib.hash import bcrypt
 from sqlalchemy import select
 
@@ -10,7 +12,7 @@ from agent.models import Merchant, User
 
 
 def _hexdigest(key: str) -> str:
-    return bcrypt.hash(key)
+    return str(bcrypt.hash(key))
 
 
 async def verify_api_key(request: Request, x_api_key: str = Header(None), x_session_token: str = Header(None)) -> Merchant:
@@ -65,8 +67,8 @@ async def get_current_user(merchant: Merchant = Depends(verify_api_key)) -> User
         return result.scalar_one_or_none()
 
 
-def require_role(*roles: str):
-    async def dependency(current_user: User | None = Depends(get_current_user)):
+def require_role(*roles: str) -> Callable[..., Any]:
+    async def dependency(current_user: User | None = Depends(get_current_user)) -> User:
         if not current_user:
             raise HTTPException(status_code=403, detail="Access denied")
         if current_user.role not in roles:

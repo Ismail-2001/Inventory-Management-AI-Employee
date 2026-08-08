@@ -1,8 +1,7 @@
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -113,7 +112,7 @@ class Settings:
         default_factory=lambda: os.getenv("AUDIT_S3_SECRET_KEY", "")
     )
 
-    allowed_origins: list = field(
+    allowed_origins: list[str] = field(
         default_factory=lambda: [
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()
         ]
@@ -150,7 +149,7 @@ class Settings:
         default_factory=lambda: os.getenv("SSO_ALLOWED_DOMAINS", "")
     )
 
-    def validate_required(self):
+    def validate_required(self) -> None:
         missing = []
         if self.environment == "production":
             if not self.shopify_store_domain:

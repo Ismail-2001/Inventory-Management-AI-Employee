@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 
@@ -11,7 +12,7 @@ from agent.ordering import build_reasoning_input, calculate_reorder_quantity
 from agent.telemetry import trace_node
 
 
-def _template_reasoning(data: dict) -> str:
+def _template_reasoning(data: dict[str, Any]) -> str:
     inv = data["inventory"]
     sup = data["supplier"]
     product = data["product"]
@@ -35,7 +36,7 @@ def _template_reasoning(data: dict) -> str:
     )
 
 
-async def _generate_reasoning(data: dict) -> str:
+async def _generate_reasoning(data: dict[str, Any]) -> str:
     if not settings.openai_api_key and not settings.google_api_key and not settings.groq_api_key:
         return _template_reasoning(data)
 
@@ -70,7 +71,7 @@ async def _generate_reasoning(data: dict) -> str:
 
 
 @trace_node("po_draft")
-async def po_draft_node(state: dict) -> dict:
+async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
     alerts = state.get("risk_alerts", [])
     forecasts_map = {f["sku_id"]: f for f in state.get("forecasts", [])}
     skus_map = {s["id"]: s for s in state.get("skus", [])}
@@ -84,8 +85,8 @@ async def po_draft_node(state: dict) -> dict:
     supplier_id = None
     default_moq = 1
     default_unit_cost = 0.0
-    moq_by_sku: dict = {}
-    unit_cost_by_sku: dict = {}
+    moq_by_sku: dict[str, Any] = {}
+    unit_cost_by_sku: dict[str, Any] = {}
     if supplier_row:
         supplier_id = supplier_row.id
         default_moq = supplier_row.default_moq or 1
@@ -93,7 +94,7 @@ async def po_draft_node(state: dict) -> dict:
         moq_by_sku = supplier_row.moq_by_sku if isinstance(supplier_row.moq_by_sku, dict) else {}
         unit_cost_by_sku = supplier_row.unit_cost_by_sku if isinstance(supplier_row.unit_cost_by_sku, dict) else {}
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
     async with async_session_factory() as session:
         sku_ids = [a["sku_id"] for a in alerts]
         existing_pos = (

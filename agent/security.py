@@ -1,14 +1,12 @@
 import secrets
-import time
+from typing import Any
 
 from fastapi import HTTPException
 from passlib.hash import bcrypt
 from sqlalchemy import select
 
-from agent.config import settings
 from agent.db import async_session_factory, session_scope
-from agent.models import Merchant, MerchantTier
-
+from agent.models import Merchant
 
 _KEY_PREFIX = "sk_live_"
 
@@ -65,7 +63,7 @@ async def revoke_api_key(prefix: str) -> bool:
     return True
 
 
-async def list_merchant_keys(merchant_id: int) -> list[dict]:
+async def list_merchant_keys(merchant_id: int) -> list[dict[str, Any]]:
     """List key prefixes and names for a merchant."""
     if merchant_id == 0:
         return []

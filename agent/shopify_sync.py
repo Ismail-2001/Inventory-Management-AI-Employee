@@ -1,9 +1,9 @@
 import asyncio
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import httpx
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from agent.config import settings
@@ -21,7 +21,7 @@ def _shopify_client() -> httpx.AsyncClient:
     return client
 
 
-def _extract_stock_from_levels(levels: list, fallback_stock: int, fallback_location_id: int | None = None) -> tuple[int, int | None]:
+def _extract_stock_from_levels(levels: list[Any], fallback_stock: int, fallback_location_id: str | None = None) -> tuple[int, str | None]:
     stock = fallback_stock
     location_id = fallback_location_id
     for le in levels:
@@ -80,7 +80,7 @@ def _parse_gid(gid: str) -> str:
     return gid.split("/")[-1]
 
 
-async def _shopify_call(client: httpx.AsyncClient, json: dict) -> dict:
+async def _shopify_call(client: httpx.AsyncClient, json: dict[str, Any]) -> dict[str, Any]:
     for attempt in range(3):
         resp = await client.post("", json=json)
         if resp.status_code == 429:
@@ -91,7 +91,7 @@ async def _shopify_call(client: httpx.AsyncClient, json: dict) -> dict:
         data = resp.json()
         if "errors" in data:
             raise RuntimeError(f"Shopify GraphQL error: {data['errors']}")
-        return data
+        return dict(data)
     raise RuntimeError("Shopify API rate limited after 3 retries")
 
 
@@ -253,7 +253,7 @@ def _parse_shopify_date(d: str) -> date:
 
 
 async def sync_sales_history(days: int = 90) -> int:
-    since_ts = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
+    since_ts = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
     since = f"created_at:>={since_ts}"
     synced = 0
     async with _shopify_client() as client:
@@ -271,7 +271,7 @@ async def sync_sales_history(days: int = 90) -> int:
 
             orders = data["data"]["orders"]
             batch = []
-            sku_lookups: list[tuple[int, str, int, date]] = []
+            sku_lookups: list[tuple[int, str, str, int]] = []
 
             for edge in orders["edges"]:
                 order = edge["node"]
@@ -310,7 +310,8 @@ async def sync_sales_history(days: int = 90) -> int:
                         select(Sku).where(Sku.sku_code.in_(all_sku_codes))
                     )
                     for s in result.scalars().all():
-                        sku_by_code[s.sku_code] = s
+                        if s.sku_code:
+                            sku_by_code[s.sku_code] = s
 
                 if all_variant_ids:
                     result = await session.execute(

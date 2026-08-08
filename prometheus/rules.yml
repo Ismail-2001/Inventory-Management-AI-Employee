@@ -1,0 +1,110 @@
+groups:
+  - name: inventory-agent-availability
+    rules:
+      - alert: InventoryAgentDown
+        expr: up{job="inventory-agent"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inventory Agent is down"
+          description: "The Inventory Agent API has been unreachable for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          (sum(rate(http_requests_total[5m])) + 1)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate"
+          description: "More than 5% of HTTP requests are returning 5xx over the last 5 minutes."
+
+      - alert: ElevatedErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          (sum(rate(http_requests_total[5m])) + 1)
+          > 0.20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical 5xx error rate"
+          description: "More than 20% of HTTP requests are returning 5xx over the last 2 minutes."
+
+  - name: inventory-agent-performance
+    rules:
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+          > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile request latency > 5s"
+          description: "P95 HTTP request latency has exceeded 5 seconds for 5 minutes."
+
+      - alert: SlowPoolCheckout
+        expr: db_connection_pool > 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Database connection pool active"
+          description: "Database connection pool has active connections (informational)."
+
+  - name: inventory-agent-capacity
+    rules:
+      - alert: ConnectionPoolExhaustion
+        expr: db_connection_pool >= 15
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "The async engine pool (size 5 + overflow 10) is nearly exhausted."
+
+      - alert: TaskQueueBacklog
+        expr: task_queue_depth > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Task queue backlog growing"
+          description: "More than 10 pipeline runs are queued, suggesting the worker cannot keep up."
+
+      - alert: HighInflightRequests
+        expr: in_flight_requests > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of in-flight requests"
+          description: "More than 100 concurrent requests are being processed."
+
+  - name: database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter unreachable"
+          description: "PostgreSQL monitoring has been down for more than 2 minutes."
+
+  - name: redis
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis exporter unreachable"
+          description: "Redis monitoring has been down for more than 2 minutes."

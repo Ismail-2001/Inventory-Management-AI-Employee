@@ -1,5 +1,5 @@
 import math
-from typing import Optional
+from typing import Any
 
 
 def calculate_reorder_quantity(
@@ -28,12 +28,12 @@ def build_reasoning_input(
     sku_code: str,
     current_stock: int,
     predicted_daily_demand: float,
-    days_of_stock_remaining: Optional[float],
+    days_of_stock_remaining: float | None,
     lead_time_days: int,
     risk_level: str,
     reorder_quantity: int,
     moq: int,
-) -> dict:
+) -> dict[str, Any]:
     return {
         "product": {"title": sku_title, "sku": sku_code},
         "inventory": {

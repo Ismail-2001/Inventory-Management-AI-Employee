@@ -11,8 +11,9 @@ Run all evals:
 import json
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 from shared.llm_client import LLMClient, LLMResult
 
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 class EvalScenario:
     name: str
     description: str
-    node_fn: Callable[[dict], Awaitable[dict]]
-    input_state: dict
+    node_fn: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+    input_state: dict[str, Any]
     criteria: list[str]
     must_contain: list[str] = field(default_factory=list)
     must_not_contain: list[str] = field(default_factory=list)
@@ -39,7 +40,7 @@ class EvalResult:
     passed: bool
     reasoning: str
     latency_ms: float
-    output: dict
+    output: dict[str, Any]
     judge_model: str
     error: str | None = None
 
@@ -136,7 +137,7 @@ Score this output. Return ONLY the JSON object."""
     )
 
 
-def _heuristic_score(scenario: EvalScenario, output: dict) -> float:
+def _heuristic_score(scenario: EvalScenario, output: dict[str, Any]) -> float:
     score = 0.5
     for key in scenario.outputAssertions:
         if key in output:
@@ -167,7 +168,7 @@ async def run_eval_suite(
     scenarios: list[EvalScenario],
     judge: LLMClient | None = None,
     runWithoutJudge: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     results = []
     for scenario in scenarios:
         result = await run_eval(scenario, judge=judge, runWithoutJudge=runWithoutJudge)

@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock
-from types import SimpleNamespace
+
+import pytest
 
 from agent import llm_usage as llm_module
 from shared.llm_client import MODEL_PRICING

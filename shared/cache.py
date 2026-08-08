@@ -13,7 +13,7 @@ from agent.config import settings
 
 
 class TTLCache:
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 1000):
+    def __init__(self, ttl_seconds: int = 3600, max_size: int = 1000) -> None:
         self._ttl = ttl_seconds
         self._max_size = max_size
         self._store: OrderedDict[str, tuple[float, Any]] = OrderedDict()
@@ -48,7 +48,7 @@ class TTLCache:
         return len(self._store)
 
 
-def _create_forecast_cache():
+def _create_forecast_cache() -> Any:
     if settings.redis_url:
         try:
             from shared.redis_cache import RedisCache
