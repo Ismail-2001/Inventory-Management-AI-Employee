@@ -4,6 +4,7 @@ Endpoints:
     GET /api/v1/audit/logs      — List audit logs with filters
     GET /api/v1/audit/export    — Export audit logs as JSONL
 """
+
 from collections.abc import Iterator
 from typing import Any
 

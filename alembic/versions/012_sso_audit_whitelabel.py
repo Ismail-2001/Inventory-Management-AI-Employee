@@ -3,9 +3,11 @@
 Revision ID: 012
 Revises: 011
 """
-from alembic import op
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision = "012"
 down_revision = "011"

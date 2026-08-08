@@ -1,4 +1,5 @@
 """Usage metrics and dashboard endpoints for monitoring and monetization."""
+
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -36,10 +37,12 @@ async def usage_summary(merchant: Merchant = Depends(verify_api_key)) -> dict[st
     async with _session() as session:
         po_q = select(func.count(PurchaseOrder.id)).where(PurchaseOrder.created_at >= week_ago)
         pending_q = select(func.count(PurchaseOrder.id)).where(
-            PurchaseOrder.status == POStatus.pending_approval, PurchaseOrder.created_at >= week_ago,
+            PurchaseOrder.status == POStatus.pending_approval,
+            PurchaseOrder.created_at >= week_ago,
         )
         approved_q = select(func.count(PurchaseOrder.id)).where(
-            PurchaseOrder.status == POStatus.approved, PurchaseOrder.created_at >= week_ago,
+            PurchaseOrder.status == POStatus.approved,
+            PurchaseOrder.created_at >= week_ago,
         )
         if merchant_filter:
             po_q = po_q.where(PurchaseOrder.merchant_id == merchant_filter)
@@ -60,9 +63,7 @@ async def usage_summary(merchant: Merchant = Depends(verify_api_key)) -> dict[st
         alert_count = (await session.execute(alert_q)).scalar() or 0
 
         forecast_q = (
-            select(func.count(Forecast.id))
-            .join(Sku, Forecast.sku_id == Sku.id)
-            .where(Forecast.created_at >= week_ago)
+            select(func.count(Forecast.id)).join(Sku, Forecast.sku_id == Sku.id).where(Forecast.created_at >= week_ago)
         )
         if merchant_filter:
             forecast_q = forecast_q.where(Sku.merchant_id == merchant_filter)
@@ -70,9 +71,7 @@ async def usage_summary(merchant: Merchant = Depends(verify_api_key)) -> dict[st
 
         llm_cost = (
             await session.execute(
-                select(func.coalesce(func.sum(LlmUsage.estimated_cost), 0.0)).where(
-                    LlmUsage.created_at >= week_ago
-                )
+                select(func.coalesce(func.sum(LlmUsage.estimated_cost), 0.0)).where(LlmUsage.created_at >= week_ago)
             )
         ).scalar() or 0.0
 
@@ -96,7 +95,8 @@ async def usage_daily(days: int = 14, merchant: Merchant = Depends(verify_api_ke
             select(
                 func.date(PurchaseOrder.created_at).label("day"),
                 func.count(PurchaseOrder.id).label("count"),
-            ).where(PurchaseOrder.created_at >= cutoff)
+            )
+            .where(PurchaseOrder.created_at >= cutoff)
             .group_by(func.date(PurchaseOrder.created_at))
             .order_by(func.date(PurchaseOrder.created_at))
         )
@@ -123,9 +123,11 @@ async def usage_daily(days: int = 14, merchant: Merchant = Depends(verify_api_ke
                 select(
                     func.date(LlmUsage.created_at).label("day"),
                     func.coalesce(func.sum(LlmUsage.estimated_cost), 0.0).label("cost"),
-                ).where(
+                )
+                .where(
                     LlmUsage.created_at >= cutoff,
-                ).group_by(func.date(LlmUsage.created_at))
+                )
+                .group_by(func.date(LlmUsage.created_at))
                 .order_by(func.date(LlmUsage.created_at))
             )
         ).all()

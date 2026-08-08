@@ -55,7 +55,9 @@ async def test_run_sync_uses_graph_from_app_state():
             }
 
     scope = {
-        "type": "http", "method": "POST", "path": "/api/v1/run-sync",
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/run-sync",
         "headers": [],
         "app": SimpleNamespace(state=SimpleNamespace(graph=FakeGraph())),
     }

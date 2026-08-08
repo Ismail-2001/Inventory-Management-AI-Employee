@@ -98,14 +98,20 @@ async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
     async with async_session_factory() as session:
         sku_ids = [a["sku_id"] for a in alerts]
         existing_pos = (
-            await session.execute(
-                select(PurchaseOrder.sku_id).where(
-                    PurchaseOrder.sku_id.in_(sku_ids),
-                    PurchaseOrder.status == POStatus.pending_approval,
-                    PurchaseOrder.created_at >= cutoff,
-                ).with_for_update()
+            (
+                await session.execute(
+                    select(PurchaseOrder.sku_id)
+                    .where(
+                        PurchaseOrder.sku_id.in_(sku_ids),
+                        PurchaseOrder.status == POStatus.pending_approval,
+                        PurchaseOrder.created_at >= cutoff,
+                    )
+                    .with_for_update()
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         existing_sku_ids = set(existing_pos)
 
     pending_batch = []
@@ -153,14 +159,16 @@ async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
 
         reasoning = await _generate_reasoning(data)
 
-        pending_batch.append({
-            "sku_id": sku_id,
-            "supplier_id": supplier_id,
-            "quantity": quantity,
-            "unit_cost": unit_cost,
-            "total_cost": round(unit_cost * quantity, 2),
-            "reasoning": reasoning,
-        })
+        pending_batch.append(
+            {
+                "sku_id": sku_id,
+                "supplier_id": supplier_id,
+                "quantity": quantity,
+                "unit_cost": unit_cost,
+                "total_cost": round(unit_cost * quantity, 2),
+                "reasoning": reasoning,
+            }
+        )
 
     if not pending_batch:
         return {**state, "purchase_orders": []}
@@ -168,14 +176,18 @@ async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
     async with async_session_factory() as session:
         pending_sku_ids = [p["sku_id"] for p in pending_batch]
         already_pending = (
-            await session.execute(
-                select(PurchaseOrder.sku_id).where(
-                    PurchaseOrder.sku_id.in_(pending_sku_ids),
-                    PurchaseOrder.status == POStatus.pending_approval,
-                    PurchaseOrder.created_at >= cutoff,
+            (
+                await session.execute(
+                    select(PurchaseOrder.sku_id).where(
+                        PurchaseOrder.sku_id.in_(pending_sku_ids),
+                        PurchaseOrder.status == POStatus.pending_approval,
+                        PurchaseOrder.created_at >= cutoff,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         skip_sku_ids = set(already_pending)
 
         thread_id = state.get("thread_id")
@@ -183,16 +195,18 @@ async def po_draft_node(state: dict[str, Any]) -> dict[str, Any]:
         for p in pending_batch:
             if p["sku_id"] in skip_sku_ids:
                 continue
-            po_objects.append(PurchaseOrder(
-                sku_id=p["sku_id"],
-                supplier_id=p["supplier_id"],
-                status=POStatus.pending_approval,
-                quantity=p["quantity"],
-                unit_cost=p["unit_cost"],
-                total_cost=p["total_cost"],
-                thread_id=thread_id,
-                reasoning_text=p["reasoning"],
-            ))
+            po_objects.append(
+                PurchaseOrder(
+                    sku_id=p["sku_id"],
+                    supplier_id=p["supplier_id"],
+                    status=POStatus.pending_approval,
+                    quantity=p["quantity"],
+                    unit_cost=p["unit_cost"],
+                    total_cost=p["total_cost"],
+                    thread_id=thread_id,
+                    reasoning_text=p["reasoning"],
+                )
+            )
         if po_objects:
             session.add_all(po_objects)
             await session.commit()

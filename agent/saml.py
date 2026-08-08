@@ -11,6 +11,7 @@ Functions:
     build_authn_request_url(provider)-> str  (HTTP-Redirect redirect URL)
     parse_saml_response(response, provider) -> dict  (verified attributes)
 """
+
 from __future__ import annotations
 
 import base64
@@ -62,22 +63,14 @@ def _parse_cert(cert: str) -> str:
     """Return the base64 cert body from PEM or bare base64 input."""
     cert = cert.strip()
     if "BEGIN CERTIFICATE" in cert:
-        return "".join(
-            line for line in cert.splitlines() if line and "CERTIFICATE" not in line
-        ).strip()
+        return "".join(line for line in cert.splitlines() if line and "CERTIFICATE" not in line).strip()
     return cert.replace("\n", "").replace(" ", "").strip()
 
 
 def build_sp_metadata(entity_id: str, acs_url: str, slo_url: str = "", name_id_format: str = NAMEID_EMAIL) -> str:
     """Build the SP EntityDescriptor metadata document."""
-    name_id_line = (
-        f'    <md:NameIDFormat>{name_id_format}</md:NameIDFormat>\n' if name_id_format else ""
-    )
-    slo_line = (
-        f'    <md:SingleLogoutService Binding="{BINDING_REDIRECT}" Location="{slo_url}"/>\n'
-        if slo_url
-        else ""
-    )
+    name_id_line = f"    <md:NameIDFormat>{name_id_format}</md:NameIDFormat>\n" if name_id_format else ""
+    slo_line = f'    <md:SingleLogoutService Binding="{BINDING_REDIRECT}" Location="{slo_url}"/>\n' if slo_url else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <md:EntityDescriptor xmlns:md="{METADATA_NS}" entityID="{entity_id}">
   <md:SPSSODescriptor protocolSupportEnumeration="{SAMLP_NS}" AuthnRequestsSigned="false" WantAssertionsSigned="true">
@@ -97,11 +90,7 @@ def build_authn_request_url(
     """Build an AuthnRequest and return the HTTP-Redirect URL to the IdP."""
     req_id = f"_{secrets.token_urlsafe(24)}"
     issue_instant = _now_iso()
-    nameid_policy = (
-        f'<samlp:NameIDPolicy Format="{name_id_format}" AllowCreate="true"/>'
-        if name_id_format
-        else ""
-    )
+    nameid_policy = f'<samlp:NameIDPolicy Format="{name_id_format}" AllowCreate="true"/>' if name_id_format else ""
     request_xml = f"""<samlp:AuthnRequest xmlns:samlp="{SAMLP_NS}" xmlns:saml="{SAML_NS}"
     ID="{req_id}" Version="2.0" IssueInstant="{issue_instant}"
     Destination="{sso_url}" AssertionConsumerServiceURL="{acs_url}"
@@ -172,9 +161,7 @@ def _check_conditions(assertion: etree._Element, expected_audience: str, acs_url
 
     audience = cond.find("saml:AudienceRestriction/saml:Audience", ns)
     if audience is not None and audience.text and audience.text != expected_audience:
-        raise SamlValidationError(
-            f"Audience mismatch: expected {expected_audience}, got {audience.text}"
-        )
+        raise SamlValidationError(f"Audience mismatch: expected {expected_audience}, got {audience.text}")
 
     conf = assertion.find("saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData", ns)
     if conf is not None:
@@ -219,9 +206,7 @@ def parse_saml_response(
         raise SamlValidationError("Not a SAML Response document")
 
     # Status check
-    status_code = root.find(
-        f".//{{{SAMLP_NS}}}Status/{{{SAMLP_NS}}}StatusCode"
-    )
+    status_code = root.find(f".//{{{SAMLP_NS}}}Status/{{{SAMLP_NS}}}StatusCode")
     if status_code is not None and status_code.get("Value") != "urn:oasis:names:tc:SAML:2.0:status:Success":
         raise SamlValidationError(f"SAML status not Success: {status_code.get('Value')}")
 

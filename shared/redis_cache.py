@@ -4,6 +4,8 @@ If REDIS_URL is set and reachable, all operations go through Redis.
 If Redis is unavailable at startup or fails at runtime, falls back to
 the in-memory TTLCache transparently.
 """
+
+import contextlib
 import json
 import logging
 import time
@@ -26,6 +28,7 @@ def _get_redis() -> Any | None:
         return None
     try:
         import redis.asyncio as aioredis
+
         _redis_client = aioredis.from_url(
             settings.redis_url,
             decode_responses=True,
@@ -79,10 +82,8 @@ class RedisCache:
     async def invalidate(self, key: str) -> None:
         r = _get_redis()
         if r is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await r.delete(self._key(key))
-            except Exception:
-                pass
         self._fallback.pop(key, None)
 
     async def clear(self, prefix: str = "") -> None:
@@ -141,9 +142,7 @@ class RedisCache:
 async def close_redis() -> None:
     global _redis_client, _redis_available
     if _redis_client is not None:
-        try:
+        with contextlib.suppress(Exception):
             await _redis_client.aclose()
-        except Exception:
-            pass
         _redis_client = None
         _redis_available = False

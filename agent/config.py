@@ -8,22 +8,12 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    shopify_store_domain: str = field(
-        default_factory=lambda: os.getenv("SHOPIFY_STORE_DOMAIN", "")
-    )
-    shopify_admin_api_token: str = field(
-        default_factory=lambda: os.getenv("SHOPIFY_ADMIN_API_TOKEN", "")
-    )
-    public_api_url: str = field(
-        default_factory=lambda: os.getenv("PUBLIC_API_URL", "http://localhost:8002")
-    )
-    shopify_api_version: str = field(
-        default_factory=lambda: os.getenv("SHOPIFY_API_VERSION", "2026-01")
-    )
+    shopify_store_domain: str = field(default_factory=lambda: os.getenv("SHOPIFY_STORE_DOMAIN", ""))
+    shopify_admin_api_token: str = field(default_factory=lambda: os.getenv("SHOPIFY_ADMIN_API_TOKEN", ""))
+    public_api_url: str = field(default_factory=lambda: os.getenv("PUBLIC_API_URL", "http://localhost:8002"))
+    shopify_api_version: str = field(default_factory=lambda: os.getenv("SHOPIFY_API_VERSION", "2026-01"))
 
-    database_url: str = field(
-        default_factory=lambda: os.getenv("DATABASE_URL", "")
-    )
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
 
     checkpointer_database_url: str = field(
         default_factory=lambda: os.getenv(
@@ -32,125 +22,66 @@ class Settings:
         )
     )
 
-    llm_provider: str = field(
-        default_factory=lambda: os.getenv("LLM_PROVIDER", "openai")
-    )
-    openai_api_key: str = field(
-        default_factory=lambda: os.getenv("OPENAI_API_KEY", "")
-    )
-    google_api_key: str = field(
-        default_factory=lambda: os.getenv("GOOGLE_API_KEY", "")
-    )
-    groq_api_key: str = field(
-        default_factory=lambda: os.getenv("GROQ_API_KEY", "")
-    )
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openai"))
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    google_api_key: str = field(default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""))
+    groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
 
-    agent_api_key: str = field(
-        default_factory=lambda: os.getenv("AGENT_API_KEY", "demo-key-2024")
-    )
+    agent_api_key: str = field(default_factory=lambda: os.getenv("AGENT_API_KEY", "demo-key-2024"))
 
-    environment: str = field(
-        default_factory=lambda: os.getenv("ENVIRONMENT", "development")
-    )
+    environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
     allow_demo_key: bool = field(
-        default_factory=lambda: os.getenv(
-            "ALLOW_DEMO_KEY", "true" if os.getenv("ENVIRONMENT", "development") != "production" else "false"
-        ).lower() == "true"
+        default_factory=lambda: (
+            os.getenv(
+                "ALLOW_DEMO_KEY", "true" if os.getenv("ENVIRONMENT", "development") != "production" else "false"
+            ).lower()
+            == "true"
+        )
     )
 
-    model_name: str = field(
-        default_factory=lambda: os.getenv("MODEL_NAME", "gemini-2.0-flash")
-    )
-    daily_llm_spend_cap: float = field(
-        default_factory=lambda: float(os.getenv("DAILY_LLM_SPEND_CAP", "5"))
-    )
-    temperature: float = field(
-        default_factory=lambda: float(os.getenv("TEMPERATURE", "0.3"))
-    )
-    max_tokens: int = field(
-        default_factory=lambda: int(os.getenv("MAX_TOKENS", "1024"))
-    )
+    model_name: str = field(default_factory=lambda: os.getenv("MODEL_NAME", "gemini-2.0-flash"))
+    daily_llm_spend_cap: float = field(default_factory=lambda: float(os.getenv("DAILY_LLM_SPEND_CAP", "5")))
+    temperature: float = field(default_factory=lambda: float(os.getenv("TEMPERATURE", "0.3")))
+    max_tokens: int = field(default_factory=lambda: int(os.getenv("MAX_TOKENS", "1024")))
 
-    slack_webhook_url: str = field(
-        default_factory=lambda: os.getenv("SLACK_WEBHOOK_URL", "")
-    )
+    slack_webhook_url: str = field(default_factory=lambda: os.getenv("SLACK_WEBHOOK_URL", ""))
 
-    shopify_webhook_secret: str = field(
-        default_factory=lambda: os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
-    )
+    shopify_webhook_secret: str = field(default_factory=lambda: os.getenv("SHOPIFY_WEBHOOK_SECRET", ""))
 
-    domain: str = field(
-        default_factory=lambda: os.getenv("DOMAIN", "")
-    )
+    domain: str = field(default_factory=lambda: os.getenv("DOMAIN", ""))
 
-    sync_days: int = field(
-        default_factory=lambda: int(os.getenv("SYNC_DAYS", "30"))
-    )
+    sync_days: int = field(default_factory=lambda: int(os.getenv("SYNC_DAYS", "30")))
 
-    database_read_url: str = field(
-        default_factory=lambda: os.getenv("DATABASE_READ_URL", "")
-    )
+    database_read_url: str = field(default_factory=lambda: os.getenv("DATABASE_READ_URL", ""))
 
-    redis_url: str = field(
-        default_factory=lambda: os.getenv("REDIS_URL", "")
-    )
+    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
 
-    deployment_region: str = field(
-        default_factory=lambda: os.getenv("DEPLOYMENT_REGION", "local")
-    )
+    deployment_region: str = field(default_factory=lambda: os.getenv("DEPLOYMENT_REGION", "local"))
 
-    audit_s3_bucket: str = field(
-        default_factory=lambda: os.getenv("AUDIT_S3_BUCKET", "")
-    )
-    audit_s3_region: str = field(
-        default_factory=lambda: os.getenv("AUDIT_S3_REGION", "us-east-1")
-    )
-    audit_s3_access_key: str = field(
-        default_factory=lambda: os.getenv("AUDIT_S3_ACCESS_KEY", "")
-    )
-    audit_s3_secret_key: str = field(
-        default_factory=lambda: os.getenv("AUDIT_S3_SECRET_KEY", "")
-    )
+    audit_s3_bucket: str = field(default_factory=lambda: os.getenv("AUDIT_S3_BUCKET", ""))
+    audit_s3_region: str = field(default_factory=lambda: os.getenv("AUDIT_S3_REGION", "us-east-1"))
+    audit_s3_access_key: str = field(default_factory=lambda: os.getenv("AUDIT_S3_ACCESS_KEY", ""))
+    audit_s3_secret_key: str = field(default_factory=lambda: os.getenv("AUDIT_S3_SECRET_KEY", ""))
 
     allowed_origins: list[str] = field(
         default_factory=lambda: [
-            o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()
+            o.strip()
+            for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+            if o.strip()
         ]
     )
 
-    sso_oidc_name: str = field(
-        default_factory=lambda: os.getenv("SSO_OIDC_NAME", "")
-    )
-    sso_oidc_client_id: str = field(
-        default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_ID", "")
-    )
-    sso_oidc_client_secret: str = field(
-        default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_SECRET", "")
-    )
-    sso_oidc_discovery_url: str = field(
-        default_factory=lambda: os.getenv("SSO_OIDC_DISCOVERY_URL", "")
-    )
-    sso_saml_name: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_NAME", "")
-    )
-    sso_saml_entity_id: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_ENTITY_ID", "")
-    )
-    sso_saml_idp_entity_id: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_IDP_ENTITY_ID", "")
-    )
-    sso_saml_sso_url: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_SSO_URL", "")
-    )
-    sso_saml_slo_url: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_SLO_URL", "")
-    )
-    sso_saml_certificate: str = field(
-        default_factory=lambda: os.getenv("SSO_SAML_CERTIFICATE", "")
-    )
-    sso_allowed_domains: str = field(
-        default_factory=lambda: os.getenv("SSO_ALLOWED_DOMAINS", "")
-    )
+    sso_oidc_name: str = field(default_factory=lambda: os.getenv("SSO_OIDC_NAME", ""))
+    sso_oidc_client_id: str = field(default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_ID", ""))
+    sso_oidc_client_secret: str = field(default_factory=lambda: os.getenv("SSO_OIDC_CLIENT_SECRET", ""))
+    sso_oidc_discovery_url: str = field(default_factory=lambda: os.getenv("SSO_OIDC_DISCOVERY_URL", ""))
+    sso_saml_name: str = field(default_factory=lambda: os.getenv("SSO_SAML_NAME", ""))
+    sso_saml_entity_id: str = field(default_factory=lambda: os.getenv("SSO_SAML_ENTITY_ID", ""))
+    sso_saml_idp_entity_id: str = field(default_factory=lambda: os.getenv("SSO_SAML_IDP_ENTITY_ID", ""))
+    sso_saml_sso_url: str = field(default_factory=lambda: os.getenv("SSO_SAML_SSO_URL", ""))
+    sso_saml_slo_url: str = field(default_factory=lambda: os.getenv("SSO_SAML_SLO_URL", ""))
+    sso_saml_certificate: str = field(default_factory=lambda: os.getenv("SSO_SAML_CERTIFICATE", ""))
+    sso_allowed_domains: str = field(default_factory=lambda: os.getenv("SSO_ALLOWED_DOMAINS", ""))
 
     def validate_required(self) -> None:
         missing = []
@@ -161,17 +92,16 @@ class Settings:
                 missing.append("SHOPIFY_ADMIN_API_TOKEN")
             if not self.public_api_url:
                 missing.append("PUBLIC_API_URL")
-            if not os.getenv("CHECKPOINTER_DATABASE_URL") or self.checkpointer_database_url == self.database_url.replace("+asyncpg", ""):
+            if not os.getenv(
+                "CHECKPOINTER_DATABASE_URL"
+            ) or self.checkpointer_database_url == self.database_url.replace("+asyncpg", ""):
                 missing.append("CHECKPOINTER_DATABASE_URL (must be separate from DATABASE_URL in production)")
             if self.agent_api_key == "demo-key-2024":
                 missing.append("AGENT_API_KEY (must not be the default demo key)")
         if not self.database_url:
             missing.append("DATABASE_URL")
         if missing:
-            raise ValueError(
-                f"Missing required settings: {', '.join(missing)}. "
-                "Check your .env file."
-            )
+            raise ValueError(f"Missing required settings: {', '.join(missing)}. Check your .env file.")
 
 
 settings = Settings()

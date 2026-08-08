@@ -78,8 +78,8 @@ _PROMPT_BOUNDARY_END = "[PROMPT_END_BOUNDARY]"
 
 
 def _sanitize_for_prompt(user_input: str) -> str:
-    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', user_input)
-    cleaned = cleaned.replace("\\", "\\\\").replace("\"", "\\\"")
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", user_input)
+    cleaned = cleaned.replace("\\", "\\\\").replace('"', '\\"')
     cleaned = cleaned.replace("[", "\\[").replace("]", "\\]")
     boundary = secrets.token_hex(8)
     return f"{_PROMPT_BOUNDARY_START}{boundary}\n{cleaned}\n{_PROMPT_BOUNDARY_END}{boundary}"
@@ -168,7 +168,7 @@ class LLMClient:
                 self.circuit_breaker.failure()
                 last_error = e
                 if attempt < self.max_retries - 1:
-                    wait = 2 ** attempt + random.uniform(0, 1)
+                    wait = 2**attempt + random.uniform(0, 1)
                     await asyncio.sleep(wait)
 
         raise RuntimeError(f"LLM call failed after {self.max_retries} attempts") from last_error

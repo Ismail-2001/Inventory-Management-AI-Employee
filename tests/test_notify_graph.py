@@ -26,6 +26,7 @@ def _block_real_network_calls():
 # Graph-level test (from remote, preserved)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_graph_sends_pending_notification_before_resume():
     """Verify the Slack message matches what the graph's notify_pending node produces."""
@@ -139,9 +140,7 @@ async def test_full_graph_returns_all_expected_state_keys():
         # triggers a critical risk alert (5.0 ≤ 7 lead_time)
         patch(
             "agent.nodes.forecast_node.calculate_forecast",
-            return_value=ForecastResult(
-                sku_id=1, predicted_daily_demand=1.0, days_of_stock_remaining=5.0
-            ),
+            return_value=ForecastResult(sku_id=1, predicted_daily_demand=1.0, days_of_stock_remaining=5.0),
         ),
         # risk_node — DB for RiskAlert creation
         patch("agent.nodes.risk_node.async_session_factory", return_value=risk_session),
@@ -158,9 +157,7 @@ async def test_full_graph_returns_all_expected_state_keys():
         ),
     ):
         compiled = await get_compiled_graph()
-        result = await compiled.ainvoke(
-            {}, {"configurable": {"thread_id": "test-graph-keys"}}
-        )
+        result = await compiled.ainvoke({}, {"configurable": {"thread_id": "test-graph-keys"}})
 
     # ── verify state contribution from every node ────────────────
     assert "skus" in result and result["skus"], "skus missing or empty"
@@ -175,6 +172,7 @@ async def test_full_graph_returns_all_expected_state_keys():
 # ---------------------------------------------------------------------------
 # notify_node unit tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def state_with_alerts_and_pos():
@@ -278,10 +276,7 @@ async def test_no_webhook_skips_http(state_with_alerts_and_pos):
 
 @pytest.mark.asyncio
 async def test_overflow_alerts_truncated():
-    alerts = [
-        {"sku_id": i, "risk_level": "warning", "reason": f"Alert {i}"}
-        for i in range(8)
-    ]
+    alerts = [{"sku_id": i, "risk_level": "warning", "reason": f"Alert {i}"} for i in range(8)]
     state = {"risk_alerts": alerts, "purchase_orders": []}
 
     result = await notify_node(state)

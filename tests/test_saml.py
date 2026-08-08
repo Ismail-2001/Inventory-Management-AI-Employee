@@ -3,6 +3,7 @@
 Uses a real generated IdP keypair + xmlsec to build signed SAMLResponses and
 assert that agent.saml verifies them end-to-end.
 """
+
 import base64
 import datetime
 import zlib
@@ -81,10 +82,10 @@ def _build_response(
     <saml:Subject>
       <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">{email}</saml:NameID>
       <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
-        <saml:SubjectConfirmationData {"NotOnOrAfter=\"2030-01-01T00:00:00Z\" " if valid else ""}Recipient="{recipient}"/>
+        <saml:SubjectConfirmationData {'NotOnOrAfter="2030-01-01T00:00:00Z" ' if valid else ""}Recipient="{recipient}"/>
       </saml:SubjectConfirmation>
     </saml:Subject>
-    <saml:Conditions {"NotBefore=\"2024-01-01T00:00:00Z\" " if valid else ""}NotOnOrAfter="{("2030-01-01T00:00:00Z" if valid else "2024-01-01T00:00:00Z")}">
+    <saml:Conditions {'NotBefore="2024-01-01T00:00:00Z" ' if valid else ""}NotOnOrAfter="{("2030-01-01T00:00:00Z" if valid else "2024-01-01T00:00:00Z")}">
       <saml:AudienceRestriction><saml:Audience>{audience}</saml:Audience></saml:AudienceRestriction>
     </saml:Conditions>
     <saml:AttributeStatement>
@@ -265,10 +266,13 @@ def test_parse_rejects_garbage():
 
 
 def test_parse_cert_pem_and_bare(idp):
-    assert parse_saml_response(
-        _build_response(idp),
-        sp_entity_id=SP_ENTITY,
-        acs_url=ACS_URL,
-        idp_entity_id=IDP_ENTITY,
-        certificate=idp.cert_pem,
-    ).email == "jane@example.com"
+    assert (
+        parse_saml_response(
+            _build_response(idp),
+            sp_entity_id=SP_ENTITY,
+            acs_url=ACS_URL,
+            idp_entity_id=IDP_ENTITY,
+            certificate=idp.cert_pem,
+        ).email
+        == "jane@example.com"
+    )

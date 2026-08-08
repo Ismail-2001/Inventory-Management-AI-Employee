@@ -9,6 +9,7 @@ Supports:
 Usage:
     from agent.sso import sso_authenticate, create_session_token
 """
+
 import hashlib
 import hmac
 import time
@@ -67,9 +68,7 @@ class SSOSession:
                 return None
 
             expected_payload = f"{user_id}:{merchant_id}:{email}:{role}:{expiry}"
-            expected_sig = hmac.new(
-                self._secret.encode(), expected_payload.encode(), hashlib.sha256
-            ).hexdigest()
+            expected_sig = hmac.new(self._secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
 
             if not hmac.compare_digest(sig, expected_sig):
                 return None
@@ -104,38 +103,43 @@ async def oidc_discover(discovery_url: str) -> dict[str, Any]:
 
 
 async def oidc_exchange_code(code: str, provider: SSOProvider) -> dict[str, Any]:
-    token_url = provider.discovery_url.replace(
-        "/.well-known/openid-configuration", "/oauth/token"
-    ) if provider.discovery_url else ""
+    token_url = (
+        provider.discovery_url.replace("/.well-known/openid-configuration", "/oauth/token")
+        if provider.discovery_url
+        else ""
+    )
 
     if not token_url:
         raise ValueError("OIDC token URL not configured")
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(token_url, data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "client_id": provider.client_id,
-            "client_secret": provider.client_secret,
-            "redirect_uri": provider.callback_url,
-        })
+        resp = await client.post(
+            token_url,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": provider.client_id,
+                "client_secret": provider.client_secret,
+                "redirect_uri": provider.callback_url,
+            },
+        )
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, dict) else {}
 
 
 async def oidc_get_userinfo(access_token: str, provider: SSOProvider) -> dict[str, Any]:
-    userinfo_url = provider.discovery_url.replace(
-        "/.well-known/openid-configuration", "/userinfo"
-    ) if provider.discovery_url else ""
+    userinfo_url = (
+        provider.discovery_url.replace("/.well-known/openid-configuration", "/userinfo")
+        if provider.discovery_url
+        else ""
+    )
 
     if not userinfo_url:
         raise ValueError("OIDC userinfo URL not configured")
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(userinfo_url, headers={
-            "Authorization": f"Bearer {access_token}"
-        })
+        resp = await client.get(userinfo_url, headers={"Authorization": f"Bearer {access_token}"})
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, dict) else {}
@@ -151,26 +155,30 @@ def validate_email_domain(email: str, allowed_domains: list[str]) -> bool:
 def get_sso_providers() -> list[SSOProvider]:
     providers = []
     if settings.sso_oidc_client_id:
-        providers.append(SSOProvider(
-            name=settings.sso_oidc_name or "OIDC",
-            provider_type="oidc",
-            client_id=settings.sso_oidc_client_id,
-            client_secret=settings.sso_oidc_client_secret,
-            discovery_url=settings.sso_oidc_discovery_url,
-            allowed_domains=[d.strip() for d in settings.sso_allowed_domains.split(",") if d.strip()],
-            callback_url=f"{settings.public_api_url}/api/v1/auth/sso/callback",
-        ))
+        providers.append(
+            SSOProvider(
+                name=settings.sso_oidc_name or "OIDC",
+                provider_type="oidc",
+                client_id=settings.sso_oidc_client_id,
+                client_secret=settings.sso_oidc_client_secret,
+                discovery_url=settings.sso_oidc_discovery_url,
+                allowed_domains=[d.strip() for d in settings.sso_allowed_domains.split(",") if d.strip()],
+                callback_url=f"{settings.public_api_url}/api/v1/auth/sso/callback",
+            )
+        )
     if settings.sso_saml_entity_id:
-        providers.append(SSOProvider(
-            name=settings.sso_saml_name or "SAML",
-            provider_type="saml",
-            client_id=settings.sso_saml_entity_id,
-            client_secret="",
-            idp_entity_id=settings.sso_saml_idp_entity_id or settings.sso_saml_entity_id,
-            sso_url=settings.sso_saml_sso_url,
-            slo_url=settings.sso_saml_slo_url,
-            certificate=settings.sso_saml_certificate,
-            allowed_domains=[d.strip() for d in settings.sso_allowed_domains.split(",") if d.strip()],
-            callback_url=f"{settings.public_api_url}/api/v1/auth/sso/callback",
-        ))
+        providers.append(
+            SSOProvider(
+                name=settings.sso_saml_name or "SAML",
+                provider_type="saml",
+                client_id=settings.sso_saml_entity_id,
+                client_secret="",
+                idp_entity_id=settings.sso_saml_idp_entity_id or settings.sso_saml_entity_id,
+                sso_url=settings.sso_saml_sso_url,
+                slo_url=settings.sso_saml_slo_url,
+                certificate=settings.sso_saml_certificate,
+                allowed_domains=[d.strip() for d in settings.sso_allowed_domains.split(",") if d.strip()],
+                callback_url=f"{settings.public_api_url}/api/v1/auth/sso/callback",
+            )
+        )
     return providers

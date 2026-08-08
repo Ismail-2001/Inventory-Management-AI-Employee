@@ -47,9 +47,7 @@ async def run_reporting(week_start: date, insights: list[dict[str, Any]]) -> str
 
         pending_count = (
             await session.execute(
-                select(func.count(PurchaseOrder.id)).where(
-                    PurchaseOrder.status == POStatus.pending_approval
-                )
+                select(func.count(PurchaseOrder.id)).where(PurchaseOrder.status == POStatus.pending_approval)
             )
         ).scalar() or 0
 
@@ -82,10 +80,13 @@ async def run_reporting(week_start: date, insights: list[dict[str, Any]]) -> str
     if settings.slack_webhook_url:
         await send_slack(settings.slack_webhook_url, digest)
 
-    await log(action="weekly_digest_sent", details={
-        "week_start": week_start.isoformat(),
-        "alert_count": alert_count,
-        "po_count": po_count,
-    })
+    await log(
+        action="weekly_digest_sent",
+        details={
+            "week_start": week_start.isoformat(),
+            "alert_count": alert_count,
+            "po_count": po_count,
+        },
+    )
 
     return digest

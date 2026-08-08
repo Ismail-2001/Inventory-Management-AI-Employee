@@ -30,9 +30,15 @@ async def calculate_acceptance_rate(
 
     total = len(pos)
     if total == 0:
-        return {"total": 0, "accepted_as_is": 0, "accepted_as_is_pct": 0,
-                "edited_then_approved": 0, "edited_then_approved_pct": 0,
-                "rejected": 0, "rejected_pct": 0}
+        return {
+            "total": 0,
+            "accepted_as_is": 0,
+            "accepted_as_is_pct": 0,
+            "edited_then_approved": 0,
+            "edited_then_approved_pct": 0,
+            "rejected": 0,
+            "rejected_pct": 0,
+        }
 
     accepted = [p for p in pos if p.status == POStatus.approved]
     rejected = [p for p in pos if p.status == POStatus.rejected]
@@ -51,7 +57,9 @@ async def calculate_acceptance_rate(
     }
 
 
-async def calculate_forecast_error_summary(since: date | None = None, session_factory: SessionFactory | None = None) -> dict[str, Any] | None:
+async def calculate_forecast_error_summary(
+    since: date | None = None, session_factory: SessionFactory | None = None
+) -> dict[str, Any] | None:
     from agent.models import POOutcome
 
     if since is None:
@@ -59,9 +67,7 @@ async def calculate_forecast_error_summary(since: date | None = None, session_fa
 
     factory = session_factory or _default_factory
     async with factory() as session:
-        result = await session.execute(
-            select(POOutcome).where(POOutcome.evaluated_at >= since)
-        )
+        result = await session.execute(select(POOutcome).where(POOutcome.evaluated_at >= since))
         outcomes = result.scalars().all()
 
     if not outcomes:

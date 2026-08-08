@@ -14,6 +14,7 @@ Usage:
 Requires the docker-compose stack from the repo root to be up:
     docker compose up -d --build
 """
+
 from __future__ import annotations
 
 import argparse
@@ -104,6 +105,7 @@ def _poll_task(task_id: str, timeout: float = 120.0) -> int:
 
 # ── Scenario: Redis killed mid-request ─────────────────────────────────────
 
+
 def scenario_redis() -> None:
     print("\n" + "=" * 70)
     print("SCENARIO: kill Redis mid-request — caches + rate limiter degrade")
@@ -138,6 +140,7 @@ def scenario_redis() -> None:
 
 # ── Scenario: PostgreSQL dropped mid-pipeline-run ──────────────────────────
 
+
 def scenario_postgres() -> None:
     print("\n" + "=" * 70)
     print("SCENARIO: disconnect Postgres during a pipeline run — no corruption")
@@ -171,6 +174,7 @@ def scenario_postgres() -> None:
 
 
 # ── Runner ─────────────────────────────────────────────────────────────────
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

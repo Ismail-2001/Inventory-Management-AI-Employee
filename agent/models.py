@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from agent.db import Base
 
 
-class POStatus(str, enum.Enum):
+class POStatus(enum.StrEnum):
     draft = "draft"
     pending_approval = "pending_approval"
     approved = "approved"
@@ -29,14 +29,16 @@ class Sku(Base):
     current_stock: Mapped[int] = mapped_column(Integer, default=0)
     location_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     sales_records: Mapped[list["SalesHistory"]] = relationship(back_populates="sku", cascade="all, delete-orphan")
     forecasts: Mapped[list["Forecast"]] = relationship(back_populates="sku", cascade="all, delete-orphan")
     alerts: Mapped[list["RiskAlert"]] = relationship(back_populates="sku", cascade="all, delete-orphan")
 
 
-class MerchantTier(str, enum.Enum):
+class MerchantTier(enum.StrEnum):
     developer = "developer"
     business = "business"
     enterprise = "enterprise"
@@ -96,9 +98,7 @@ class Forecast(Base):
 
     sku: Mapped["Sku"] = relationship(back_populates="forecasts")
 
-    __table_args__ = (
-        Index("ix_forecast_sku_created", "sku_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_forecast_sku_created", "sku_id", "created_at"),)
 
 
 class RiskAlert(Base):
@@ -113,9 +113,7 @@ class RiskAlert(Base):
 
     sku: Mapped["Sku"] = relationship(back_populates="alerts")
 
-    __table_args__ = (
-        Index("ix_risk_sku_resolved", "sku_id", "resolved"),
-    )
+    __table_args__ = (Index("ix_risk_sku_resolved", "sku_id", "resolved"),)
 
 
 class Supplier(Base):
@@ -193,9 +191,7 @@ class LlmUsage(Base):
     estimated_cost: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_llm_usage_created", "created_at"),
-    )
+    __table_args__ = (Index("ix_llm_usage_created", "created_at"),)
 
 
 class IdempotencyKey(Base):
@@ -214,9 +210,7 @@ class WebhookEvent(Base):
     event_type: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_webhook_event_type", "event_type"),
-    )
+    __table_args__ = (Index("ix_webhook_event_type", "event_type"),)
 
 
 class User(Base):
@@ -256,6 +250,4 @@ class AuditLog(Base):
     details: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_audit_merchant_created", "merchant_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_audit_merchant_created", "merchant_id", "created_at"),)

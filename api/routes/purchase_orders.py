@@ -21,9 +21,7 @@ _IDEMPOTENCY_CACHE_MAX = 500
 
 async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
     async with session_scope(async_session_factory) as session:
-        result = await session.execute(
-            select(PurchaseOrder).where(PurchaseOrder.id == po_id).with_for_update()
-        )
+        result = await session.execute(select(PurchaseOrder).where(PurchaseOrder.id == po_id).with_for_update())
         po = result.scalar_one_or_none()
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -73,7 +71,9 @@ async def _resume_graph(request: Request, thread_id: str, resume_value: str) -> 
     )
 
 
-async def _run_with_idempotency(key: str | None, endpoint: str, action: Callable[[], Awaitable[dict[str, Any]]]) -> dict[str, Any]:
+async def _run_with_idempotency(
+    key: str | None, endpoint: str, action: Callable[[], Awaitable[dict[str, Any]]]
+) -> dict[str, Any]:
     if key and key in _idempotency_cache:
         return _idempotency_cache[key]
 
@@ -115,8 +115,8 @@ async def list_purchase_orders(
         if status:
             try:
                 status_enum = POStatus(status)
-            except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from exc
             query = query.where(PurchaseOrder.status == status_enum)
             count_q = count_q.where(PurchaseOrder.status == status_enum)
 
@@ -151,12 +151,15 @@ async def list_purchase_orders(
     }
 
 
-async def _approve_po_impl(request: Request, po_id: int, approved_by: str, quantity: int | None, merchant_id: int | None = None) -> dict[str, Any]:
+async def _approve_po_impl(
+    request: Request, po_id: int, approved_by: str, quantity: int | None, merchant_id: int | None = None
+) -> dict[str, Any]:
     po, thread_id = await _resolve_po(po_id)
     await _mark_edited_if_changed(po_id, quantity)
     await _resume_graph(request, thread_id, "approve")
     await _update_po_status(
-        po_id, POStatus.approved,
+        po_id,
+        POStatus.approved,
         approved_by=approved_by,
         approved_at=datetime.now(UTC),
         quantity=quantity if quantity is not None else po.quantity,
@@ -244,7 +247,8 @@ async def po_action_via_token(
         await _mark_edited_if_changed(po_id, quantity)
         await _resume_graph(request, thread_id, "approve")
         await _update_po_status(
-            po_id, POStatus.approved,
+            po_id,
+            POStatus.approved,
             approved_by="token",
             approved_at=datetime.now(UTC),
             quantity=quantity if quantity is not None else po.quantity,

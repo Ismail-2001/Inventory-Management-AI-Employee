@@ -7,6 +7,7 @@ Endpoints:
     POST /api/v1/auth/sso/logout     — Invalidate session
     GET  /api/v1/auth/sso/me         — Get current user from session token
 """
+
 import logging
 from typing import Any
 from urllib.parse import urlencode
@@ -89,17 +90,19 @@ async def sso_login(provider: str = "") -> Any:
 
     if target.provider_type == "oidc":
         state = _generate_state()
-        params = urlencode({
-            "client_id": target.client_id,
-            "redirect_uri": target.callback_url,
-            "response_type": "code",
-            "scope": "openid email profile",
-            "state": state,
-        })
+        params = urlencode(
+            {
+                "client_id": target.client_id,
+                "redirect_uri": target.callback_url,
+                "response_type": "code",
+                "scope": "openid email profile",
+                "state": state,
+            }
+        )
         discovery = target.discovery_url
-        authorization_endpoint = discovery.replace(
-            "/.well-known/openid-configuration", "/authorize"
-        ) if discovery else ""
+        authorization_endpoint = (
+            discovery.replace("/.well-known/openid-configuration", "/authorize") if discovery else ""
+        )
         if not authorization_endpoint:
             raise HTTPException(status_code=500, detail="OIDC discovery URL not configured")
         return RedirectResponse(url=f"{authorization_endpoint}?{params}")
@@ -152,7 +155,9 @@ async def sso_callback(request: Request, body: SSOCallbackRequest | None = None)
 
     if saml_response:
         provider_name = form_data.get("RelayState") or form_data.get("provider") or ""
-        provider = next((p for p in providers if p.provider_type == "saml" and (not provider_name or p.name == provider_name)), None)
+        provider = next(
+            (p for p in providers if p.provider_type == "saml" and (not provider_name or p.name == provider_name)), None
+        )
         if not provider:
             provider = next((p for p in providers if p.provider_type == "saml"), None)
         if not provider:
@@ -233,6 +238,7 @@ async def sso_me(x_session_token: str = Header(None)) -> dict[str, Any]:
 
 def _generate_state() -> str:
     import secrets
+
     return secrets.token_urlsafe(32)
 
 
@@ -281,13 +287,12 @@ async def _find_or_create_sso_user(email: str, userinfo: dict[str, Any]) -> tupl
         domain = email.split("@")[-1]
         merchant_name = domain.split(".")[0].title()
 
-        merchant_result = await session.execute(
-            select(Merchant).where(Merchant.name == merchant_name).limit(1)
-        )
+        merchant_result = await session.execute(select(Merchant).where(Merchant.name == merchant_name).limit(1))
         merchant = merchant_result.scalar_one_or_none()
 
         if not merchant:
             import secrets as _secrets
+
             api_key = _secrets.token_urlsafe(32)
             merchant = Merchant(
                 name=merchant_name,

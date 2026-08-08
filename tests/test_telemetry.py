@@ -1,4 +1,3 @@
-
 import pytest
 
 from agent import telemetry as telemetry_module

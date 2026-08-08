@@ -30,6 +30,7 @@ def _setup_pool_monitoring(engine: AsyncEngine) -> None:
 
     def _emit_pool_gauge() -> None:
         from shared.metrics import metrics
+
         db_name = engine.url.database or "default"
         metrics.gauge(
             "db_connection_pool",
@@ -58,7 +59,10 @@ def _setup_pool_monitoring(engine: AsyncEngine) -> None:
         if total > 0 and checked_out / total >= _POOL_WARN_THRESHOLD:
             logger.warning(
                 "Connection pool near exhaustion: %d/%d checked out (pool_size=%d, overflow=%d)",
-                checked_out, total, pool.size(), pool.overflow(),
+                checked_out,
+                total,
+                pool.size(),
+                pool.overflow(),
             )
         _emit_pool_gauge()
 

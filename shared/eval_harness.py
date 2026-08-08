@@ -8,6 +8,7 @@ Usage:
 Run all evals:
     pytest tests/test_llm_eval.py -v
 """
+
 import json
 import logging
 import time
@@ -71,7 +72,11 @@ async def run_eval(
 ) -> EvalResult:
     start = time.monotonic()
     try:
-        output = await scenario.input_fn(scenario.input_state) if hasattr(scenario, 'input_fn') else await scenario.node_fn(scenario.input_state)
+        output = (
+            await scenario.input_fn(scenario.input_state)
+            if hasattr(scenario, "input_fn")
+            else await scenario.node_fn(scenario.input_state)
+        )
     except Exception as exc:
         return EvalResult(
             scenario=scenario.name,
@@ -110,9 +115,9 @@ CRITERIA:
 {chr(10).join(f"- {c}" for c in scenario.criteria)}
 
 Additional checks:
-- Must contain: {scenario.must_contain or 'none'}
-- Must NOT contain: {scenario.must_not_contain or 'none'}
-- Output assertions: {json.dumps(scenario.outputAssertions, default=str) if scenario.outputAssertions else 'none'}
+- Must contain: {scenario.must_contain or "none"}
+- Must NOT contain: {scenario.must_not_contain or "none"}
+- Output assertions: {json.dumps(scenario.outputAssertions, default=str) if scenario.outputAssertions else "none"}
 
 Score this output. Return ONLY the JSON object."""
 
@@ -145,12 +150,10 @@ def _heuristic_score(scenario: EvalScenario, output: dict[str, Any]) -> float:
             actual = output[key]
             if expected is True:
                 score += 0.15
-            elif expected is False:
-                if actual and actual != [] and actual != {}:
-                    score -= 0.15
-            elif isinstance(expected, (int, float)):
-                if actual is not None:
-                    score += 0.1
+            elif expected is False and actual and actual != [] and actual != {}:
+                score -= 0.15
+            elif isinstance(expected, (int, float)) and actual is not None:
+                score += 0.1
     for text in scenario.must_contain:
         output_text = json.dumps(output, default=str).lower()
         if text.lower() in output_text:

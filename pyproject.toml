@@ -10,6 +10,16 @@ line-length = 120
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependencies in parameter defaults are the framework's idiomatic
+# dependency-injection pattern (not accidental function calls).
+extend-immutable-calls = ["fastapi.Depends", "agent.auth.require_role"]
+
+[tool.ruff.lint.per-file-ignores]
+# api/main.py must configure logging/telemetry before importing modules that
+# instantiate loggers and tracers, so its imports are deliberately mid-file.
+"api/main.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

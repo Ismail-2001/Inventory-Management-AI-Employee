@@ -2,6 +2,7 @@
 
 No external dependencies — emits Prometheus text format from in-process counters/histograms.
 """
+
 from collections import defaultdict
 from threading import Lock
 from typing import Any
@@ -75,4 +76,5 @@ def setup_metrics(app: FastAPI) -> None:
     @app.get("/metrics")
     async def prometheus_metrics() -> Any:
         from fastapi.responses import PlainTextResponse
+
         return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")

@@ -30,11 +30,13 @@ async def risk_node(state: dict[str, Any]) -> dict[str, Any]:
                 )
                 session.add(alert)
                 await session.commit()
-                alerts.append({
-                    "sku_id": f["sku_id"],
-                    "risk_level": level,
-                    "reason": reason,
-                    "alert_id": alert.id,
-                })
+                alerts.append(
+                    {
+                        "sku_id": f["sku_id"],
+                        "risk_level": level,
+                        "reason": reason,
+                        "alert_id": alert.id,
+                    }
+                )
 
     return {**state, "risk_alerts": alerts}

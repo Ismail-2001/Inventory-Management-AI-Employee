@@ -10,8 +10,7 @@ def _secret() -> str:
     if not settings.agent_api_key:
         if settings.environment == "production":
             raise RuntimeError(
-                "AGENT_API_KEY must be set in production. "
-                "PO approval tokens cannot be signed without a secret."
+                "AGENT_API_KEY must be set in production. PO approval tokens cannot be signed without a secret."
             )
         return "default-signing-secret-change-me"
     return settings.agent_api_key

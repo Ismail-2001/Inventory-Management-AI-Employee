@@ -4,9 +4,11 @@ Validates that each handler correctly processes known Shopify payloads and
 produces the expected side effects (DB upserts). These are pure unit tests —
 all external dependencies (HTTP, Shopify API) are mocked.
 """
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from agent import webhooks
 
@@ -48,13 +50,17 @@ PRODUCT_PAYLOAD_NO_VARIANTS = {
 class FakeResult:
     def __init__(self, rows=None):
         self._rows = rows or []
+
     def scalars(self):
         class FakeScalars:
             def __init__(self, rows):
                 self._rows = rows
+
             def all(self):
                 return self._rows
+
         return FakeScalars(self._rows)
+
     def scalar_one_or_none(self):
         return self._rows[0] if self._rows else None
 
@@ -174,18 +180,24 @@ async def test_product_update_skips_empty_variant_id():
 def test_hmac_verification_rejects_missing_header():
     class FakeRequest:
         headers = {}
+
         async def body(self):
             return b"test"
-    with pytest.raises(Exception):
+
+    with pytest.raises(HTTPException):
         import asyncio
+
         asyncio.run(webhooks.verify_shopify_webhook(FakeRequest()))
 
 
 def test_hmac_verification_rejects_bad_signature():
     class FakeRequest:
         headers = {"X-Shopify-Hmac-Sha256": "bad"}
+
         async def body(self):
             return b"test"
-    with pytest.raises(Exception):
+
+    with pytest.raises(HTTPException):
         import asyncio
+
         asyncio.run(webhooks.verify_shopify_webhook(FakeRequest()))

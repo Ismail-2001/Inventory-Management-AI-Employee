@@ -22,9 +22,7 @@ async def evaluate_pending_outcomes() -> int:
 
     for po in pos:
         async with async_session_factory() as session:
-            existing = await session.execute(
-                select(POOutcome).where(POOutcome.po_id == po.id)
-            )
+            existing = await session.execute(select(POOutcome).where(POOutcome.po_id == po.id))
             if existing.scalar_one_or_none():
                 continue
 
@@ -32,7 +30,7 @@ async def evaluate_pending_outcomes() -> int:
             if not sku:
                 continue
 
-            lead_time_days = getattr(sku, 'lead_time_days', None) or 7
+            lead_time_days = getattr(sku, "lead_time_days", None) or 7
             approved_at = po.approved_at
             if approved_at is None:
                 continue
@@ -45,8 +43,7 @@ async def evaluate_pending_outcomes() -> int:
             two_weeks_after = delivery_date + timedelta(days=14)
 
             sales_before = await session.execute(
-                select(func.sum(SalesHistory.units_sold))
-                .where(
+                select(func.sum(SalesHistory.units_sold)).where(
                     SalesHistory.sku_id == po.sku_id,
                     SalesHistory.date >= two_weeks_before,
                     SalesHistory.date < delivery_date,
@@ -55,8 +52,7 @@ async def evaluate_pending_outcomes() -> int:
             demand_before = sales_before.scalar() or 0
 
             sales_after = await session.execute(
-                select(func.sum(SalesHistory.units_sold))
-                .where(
+                select(func.sum(SalesHistory.units_sold)).where(
                     SalesHistory.sku_id == po.sku_id,
                     SalesHistory.date >= delivery_date,
                     SalesHistory.date <= two_weeks_after,
@@ -68,15 +64,16 @@ async def evaluate_pending_outcomes() -> int:
             stockout = sku.current_stock <= 0
 
             forecast_row = await session.execute(
-                select(func.avg(SalesHistory.units_sold))
-                .where(
+                select(func.avg(SalesHistory.units_sold)).where(
                     SalesHistory.sku_id == po.sku_id,
                     SalesHistory.date >= two_weeks_before,
                     SalesHistory.date < delivery_date,
                 )
             )
             forecast_avg = forecast_row.scalar() or 1
-            error_pct = abs(forecast_avg - actual_daily_demand) / max(forecast_avg, 0.1) * 100 if forecast_avg > 0 else 0
+            error_pct = (
+                abs(forecast_avg - actual_daily_demand) / max(forecast_avg, 0.1) * 100 if forecast_avg > 0 else 0
+            )
 
             outcome = POOutcome(
                 po_id=po.id,

@@ -6,6 +6,7 @@ Requires:
 
 Marked with ``@pytest.mark.integration`` so it can be excluded from quick local runs.
 """
+
 import os
 import uuid
 
@@ -38,7 +39,12 @@ async def _clean_tables():
 
 
 async def _seed_sku(session: AsyncSession, merchant_id: int = 0) -> Sku:
-    merchant = Merchant(id=merchant_id, name="Integration Test Merchant", hashed_api_key="test", shopify_store_domain="test.myshopify.com")
+    merchant = Merchant(
+        id=merchant_id,
+        name="Integration Test Merchant",
+        hashed_api_key="test",
+        shopify_store_domain="test.myshopify.com",
+    )
     session.add(merchant)
     await session.flush()
     sku = Sku(

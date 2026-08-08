@@ -25,7 +25,7 @@ def sample_item():
         lead_time_days=7,
         unit_cost=25.00,
         unit_price=79.99,
-        category="electronics"
+        category="electronics",
     )
 
 
@@ -39,7 +39,7 @@ def critical_item():
         lead_time_days=10,
         unit_cost=3.00,
         unit_price=19.99,
-        category="accessories"
+        category="accessories",
     )
 
 
@@ -53,7 +53,7 @@ def overstocked_item():
         lead_time_days=14,
         unit_cost=50.00,
         unit_price=149.99,
-        category="accessories"
+        category="accessories",
     )
 
 
@@ -67,11 +67,7 @@ def test_agent_initialization(agent):
 
 def test_item_model():
     item = InventoryItem(
-        product_id="TEST-001",
-        name="Test Product",
-        current_stock=100,
-        daily_sales=5.0,
-        lead_time_days=7
+        product_id="TEST-001", name="Test Product", current_stock=100, daily_sales=5.0, lead_time_days=7
     )
     assert item.product_id == "TEST-001"
     assert item.supplier_moq == 1

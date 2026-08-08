@@ -4,15 +4,17 @@ Revision ID: 004
 Revises: 003
 Create Date: 2026-07-10
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
+
 revision: str = "004"
-down_revision: Union[str, None] = "003"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "003"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -22,10 +24,15 @@ def upgrade() -> None:
     # deliberately not done in the same migration as the backfill, since a
     # bad backfill assumption (multiple untagged merchants) should not be
     # silently forced NOT NULL in one step.
-    op.add_column("skus", sa.Column("merchant_id", sa.Integer(), sa.ForeignKey("merchants.id", ondelete="CASCADE"), nullable=True))
+    op.add_column(
+        "skus", sa.Column("merchant_id", sa.Integer(), sa.ForeignKey("merchants.id", ondelete="CASCADE"), nullable=True)
+    )
     op.create_index("ix_skus_merchant_id", "skus", ["merchant_id"])
 
-    op.add_column("purchase_orders", sa.Column("merchant_id", sa.Integer(), sa.ForeignKey("merchants.id", ondelete="CASCADE"), nullable=True))
+    op.add_column(
+        "purchase_orders",
+        sa.Column("merchant_id", sa.Integer(), sa.ForeignKey("merchants.id", ondelete="CASCADE"), nullable=True),
+    )
     op.create_index("ix_purchase_orders_merchant_id", "purchase_orders", ["merchant_id"])
 
     # sales_history, forecasts, risk_alerts stay scoped indirectly via

@@ -4,6 +4,7 @@ Run: uvicorn api.main:app --host 0.0.0.0 --port 8002
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -66,10 +67,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     task_queue.start(app)
     from agent.scheduler import start
+
     start()
 
     try:
         from shared.redis_cache import _get_redis
+
         r = _get_redis()
         if r is not None:
             await r.ping()
@@ -90,18 +93,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         loop.create_task(_graceful_shutdown())
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
+        with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, _signal_handler)
-        except NotImplementedError:
-            pass
 
     yield
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
+        with contextlib.suppress(NotImplementedError, ValueError):
             loop.remove_signal_handler(sig)
-        except (NotImplementedError, ValueError):
-            pass
 
     drain_timeout = 10.0
     start_time = time.monotonic()
@@ -113,12 +112,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_checkpointer(getattr(app.state, "checkpointer", None))
     try:
         from shared.redis_cache import close_redis
+
         await close_redis()
     except Exception:
         pass
 
     try:
         from agent.db import engine
+
         await engine.dispose()
     except Exception:
         pass
@@ -154,20 +155,24 @@ _tier_cache_dict: Any = None
 if _cfg.redis_url:
     try:
         from shared.redis_cache import RedisCache as _TierCache
+
         _tier_cache = _TierCache(namespace="tier", ttl_seconds=300, max_size=200)
     except Exception:
         from collections import OrderedDict
+
         _tier_cache = None
 else:
     _tier_cache = None
 
 if _tier_cache is None:
     from collections import OrderedDict
+
     _tier_cache_dict = OrderedDict()
 else:
     _tier_cache_dict = None
 
 _TIER_CACHE_MAX = 200
+
 
 class TierLookupMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -183,13 +188,18 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                         from sqlalchemy import select
 
                         from agent.db import async_session_factory
+
                         async with async_session_factory() as session:
                             result = await session.execute(
                                 select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
                             )
                             merchant = result.scalar_one_or_none()
                             if merchant:
-                                tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                                tier = (
+                                    MerchantTier(merchant.tier)
+                                    if merchant.tier in ("developer", "business", "enterprise")
+                                    else MerchantTier.developer
+                                )
                                 await _tier_cache.set(prefix, tier.value)
                                 request.state.merchant_tier = tier
                     except Exception:
@@ -204,13 +214,18 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                         from sqlalchemy import select
 
                         from agent.db import async_session_factory
+
                         async with async_session_factory() as session:
                             result = await session.execute(
                                 select(Merchant).where(Merchant.key_prefix == prefix).limit(1)
                             )
                             merchant = result.scalar_one_or_none()
                             if merchant:
-                                tier = MerchantTier(merchant.tier) if merchant.tier in ("developer", "business", "enterprise") else MerchantTier.developer
+                                tier = (
+                                    MerchantTier(merchant.tier)
+                                    if merchant.tier in ("developer", "business", "enterprise")
+                                    else MerchantTier.developer
+                                )
                                 _tier_cache_dict[prefix] = tier
                                 if len(_tier_cache_dict) > _TIER_CACHE_MAX:
                                     _tier_cache_dict.popitem(last=False)
@@ -218,6 +233,7 @@ class TierLookupMiddleware(BaseHTTPMiddleware):
                     except Exception:
                         pass
         return await call_next(request)
+
 
 app.add_middleware(TierLookupMiddleware)
 
@@ -250,12 +266,10 @@ async def frontend_config() -> dict[str, Any]:
         result["api_key"] = settings.agent_api_key
 
     from agent.sso import get_sso_providers
+
     providers = get_sso_providers()
     result["sso_enabled"] = len(providers) > 0
-    result["sso_providers"] = [
-        {"name": p.name, "type": p.provider_type}
-        for p in providers
-    ]
+    result["sso_providers"] = [{"name": p.name, "type": p.provider_type} for p in providers]
 
     return result
 
@@ -272,8 +286,10 @@ async def health(request: Request) -> dict[str, Any]:
     }
     try:
         from agent.db import engine
+
         async with engine.connect() as conn:
             from sqlalchemy import text
+
             await conn.execute(text("SELECT 1"))
         result["database"] = "ok"
     except Exception:
@@ -281,6 +297,7 @@ async def health(request: Request) -> dict[str, Any]:
         result["database"] = "error"
     try:
         from shared.redis_cache import _get_redis
+
         r = _get_redis()
         if r is not None:
             await r.ping()
@@ -293,10 +310,12 @@ async def health(request: Request) -> dict[str, Any]:
             result["status"] = "degraded"
 
     from agent.sso import get_sso_providers
+
     sso_providers = get_sso_providers()
     result["sso"] = "configured" if sso_providers else "not_configured"
 
     return result
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -304,6 +323,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         status_code=500,
         content={"detail": "Internal server error"},
     )
+
 
 app.include_router(run_sync_router)
 app.include_router(po_router)
@@ -353,7 +373,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(status_code=413, content={"detail": "Request too large"})
         return await call_next(request)
 
+
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=1_048_576)
+
 
 class SecurityHeadersMiddleware:
     def __init__(self, app: Any) -> None:
@@ -367,18 +389,24 @@ class SecurityHeadersMiddleware:
         async def send_wrapper(message: dict[str, Any]) -> None:
             if message["type"] == "http.response.start":
                 headers = message.get("headers", [])
-                headers.extend([
-                    (b"content-security-policy", b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'"),
-                    (b"x-content-type-options", b"nosniff"),
-                    (b"x-frame-options", b"DENY"),
-                    (b"referrer-policy", b"strict-origin-when-cross-origin"),
-                ])
+                headers.extend(
+                    [
+                        (
+                            b"content-security-policy",
+                            b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'",
+                        ),
+                        (b"x-content-type-options", b"nosniff"),
+                        (b"x-frame-options", b"DENY"),
+                        (b"referrer-policy", b"strict-origin-when-cross-origin"),
+                    ]
+                )
                 if settings.domain:
                     headers.append((b"strict-transport-security", b"max-age=31536000; includeSubDomains"))
                 message["headers"] = headers
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
+
 
 app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
 
@@ -393,6 +421,7 @@ class CorrelationIdMiddleware:
             return
 
         from shared.metrics import metrics
+
         request = Request(scope, receive)
         correlation_id = request.headers.get("X-Correlation-Id") or str(uuid.uuid4())
         start = time.perf_counter()
@@ -415,6 +444,7 @@ class CorrelationIdMiddleware:
         metrics.inc("http_requests_total", method=method, path=path, status=str(status_code))
         metrics.observe("http_request_duration_seconds", elapsed, method=method, path=path)
 
+
 app.add_middleware(CorrelationIdMiddleware)  # type: ignore[arg-type]
 
 
@@ -435,6 +465,7 @@ class InflightTracker:
 
     def _emit(self) -> None:
         from shared.metrics import metrics
+
         metrics.gauge("in_flight_requests", self.count)
 
 
@@ -456,6 +487,7 @@ class InflightMiddleware:
         finally:
             await inflight_tracker.decrement()
 
+
 app.add_middleware(InflightMiddleware)  # type: ignore[arg-type]
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
@@ -466,9 +498,7 @@ if FRONTEND_DIR.is_dir():
 @app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
 @limiter.limit(_get_tier_limit)
 async def analyze_inventory(
-    request: Request,
-    item: InventoryItem,
-    x_api_key: str = Depends(verify_api_key)
+    request: Request, item: InventoryItem, x_api_key: str = Depends(verify_api_key)
 ) -> InventoryAnalysis:
     """
     DEPRECATED: this is the original single-shot demo endpoint, kept only
@@ -492,40 +522,37 @@ async def analyze_inventory(
     try:
         result = await agent.analyze(item)
         return result
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
 @limiter.limit(_get_tier_limit)
 async def analyze_bulk(
-    request: Request,
-    request_body: BulkAnalysisRequest,
-    x_api_key: str = Depends(verify_api_key)
+    request: Request, request_body: BulkAnalysisRequest, x_api_key: str = Depends(verify_api_key)
 ) -> BulkAnalysisResponse:
     """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.analyze_bulk(request_body.items)
         return result
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @app.post("/api/v1/forecast", deprecated=True)
 @limiter.limit(_get_tier_limit)
 async def forecast_demand(
-    request: Request,
-    item: InventoryItem,
-    x_api_key: str = Depends(verify_api_key)
+    request: Request, item: InventoryItem, x_api_key: str = Depends(verify_api_key)
 ) -> dict[str, Any]:
     """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
     try:
         result = await agent.forecast_demand(item)
         return result
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8002)

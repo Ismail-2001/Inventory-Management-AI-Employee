@@ -30,8 +30,8 @@ async def run_sync(request: Request, merchant: Merchant = Depends(verify_api_key
             ),
             timeout=120.0,
         )
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Graph execution timed out")
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Graph execution timed out") from exc
 
     pending_pos = result.get("purchase_orders", [])
 

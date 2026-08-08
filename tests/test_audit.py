@@ -1,4 +1,3 @@
-
 import pytest
 
 from agent import audit as audit_module

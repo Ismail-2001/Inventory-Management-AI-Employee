@@ -13,7 +13,7 @@ async def test_start_skips_when_env_not_set(monkeypatch):
 
     scheduler_module.start()
 
-    assert scheduler_module.scheduler.running is False or True
+    assert scheduler_module.scheduler.running is False
 
 
 @pytest.mark.asyncio

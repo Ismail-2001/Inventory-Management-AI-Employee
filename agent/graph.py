@@ -29,10 +29,14 @@ def build_graph() -> StateGraph:
         alerts = state.get("risk_alerts", [])
         return "po_draft" if alerts else END
 
-    workflow.add_conditional_edges("risk", has_risk_alerts, {
-        "po_draft": "po_draft",
-        END: END,
-    })
+    workflow.add_conditional_edges(
+        "risk",
+        has_risk_alerts,
+        {
+            "po_draft": "po_draft",
+            END: END,
+        },
+    )
 
     workflow.add_edge("po_draft", "notify_pending")
     workflow.add_edge("notify_pending", "notify_confirmed")

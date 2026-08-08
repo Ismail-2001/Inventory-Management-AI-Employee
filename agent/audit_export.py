@@ -3,6 +3,7 @@
 Uses httpx — no boto3 dependency. Works with AWS S3, MinIO, DigitalOcean Spaces, etc.
 S3 API via REST: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 """
+
 import hashlib
 import hmac
 import json
@@ -16,7 +17,16 @@ from agent.db import async_session_factory
 from agent.models import AuditLog
 
 
-def _s3_sign(method: str, path: str, headers: dict[str, str], body: bytes, region: str, bucket: str, access_key: str, secret_key: str) -> tuple[str, dict[str, str]]:
+def _s3_sign(
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    body: bytes,
+    region: str,
+    bucket: str,
+    access_key: str,
+    secret_key: str,
+) -> tuple[str, dict[str, str]]:
     """Minimal AWS Signature V4 signing for S3 PUT."""
     service = "s3"
     now = datetime.now(UTC)
@@ -33,7 +43,9 @@ def _s3_sign(method: str, path: str, headers: dict[str, str], body: bytes, regio
     canonical_request = f"{method}\n{path}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
 
     credential_scope = f"{date_stamp}/{region}/{service}/aws4_request"
-    string_to_sign = f"AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode()).hexdigest()}"
+    string_to_sign = (
+        f"AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode()).hexdigest()}"
+    )
 
     def _sign(key: bytes, msg: str) -> bytes:
         return hmac.new(key, msg.encode(), hashlib.sha256).digest()
@@ -58,9 +70,7 @@ async def export_audit_logs_to_s3() -> int:
 
     cutoff = datetime.now(UTC) - timedelta(hours=24)
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(AuditLog).where(AuditLog.created_at >= cutoff)
-        )
+        result = await session.execute(select(AuditLog).where(AuditLog.created_at >= cutoff))
         entries = result.scalars().all()
 
     if not entries:
@@ -95,8 +105,14 @@ async def export_audit_logs_to_s3() -> int:
     headers = {"Content-Type": "application/jsonl"}
 
     amz_date, signed_headers = _s3_sign(
-        "PUT", path, headers, body,
-        region, bucket, settings.audit_s3_access_key, settings.audit_s3_secret_key,
+        "PUT",
+        path,
+        headers,
+        body,
+        region,
+        bucket,
+        settings.audit_s3_access_key,
+        settings.audit_s3_secret_key,
     )
 
     async with httpx.AsyncClient() as client:

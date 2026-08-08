@@ -12,13 +12,13 @@ Requires DATABASE_URL in .env (points to PostgreSQL).
 
 import asyncio
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from agent.config import settings
-from agent.models import POStatus, PurchaseOrder, RiskAlert, Sku, SalesHistory
+from agent.models import SalesHistory, Sku
 
 engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -101,7 +101,7 @@ DEMO_SKUS = [
     {
         "shopify_variant_id": "gid://shopify/Variant/6001",
         "sku_code": "MON-27-4K-001",
-        "title": "27\" 4K Monitor",
+        "title": '27" 4K Monitor',
         "current_stock": 15,
         "location_id": "warehouse-b",
         "lead_time_days": 21,
@@ -120,7 +120,6 @@ def _generate_sales_history(sku_id: int, days: int = 90) -> list[tuple]:
     random.seed(sku_id * 7 + 42)
     history = []
     base_velocity = random.uniform(1.0, 40.0)
-    trend = random.uniform(-0.1, 0.15)
 
     for day_offset in range(days):
         d = date.today() - timedelta(days=days - day_offset)
@@ -185,7 +184,7 @@ async def seed_demo_data():
         await session.commit()
 
         print(f"   ✅ Inserted {len(DEMO_SKUS)} SKUs + {len(all_rows)} sales records.")
-        print(f"   🚨 SKUs at critical/low stock:")
+        print("   🚨 SKUs at critical/low stock:")
         for s in DEMO_SKUS:
             if s["current_stock"] <= 5:
                 print(f"      ⚠️  {s['sku_code']} — {s['title']} — stock: {s['current_stock']}")

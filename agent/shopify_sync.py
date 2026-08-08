@@ -21,7 +21,9 @@ def _shopify_client() -> httpx.AsyncClient:
     return client
 
 
-def _extract_stock_from_levels(levels: list[Any], fallback_stock: int, fallback_location_id: str | None = None) -> tuple[int, str | None]:
+def _extract_stock_from_levels(
+    levels: list[Any], fallback_stock: int, fallback_location_id: str | None = None
+) -> tuple[int, str | None]:
     stock = fallback_stock
     location_id = fallback_location_id
     for le in levels:
@@ -85,7 +87,7 @@ async def _shopify_call(client: httpx.AsyncClient, json: dict[str, Any]) -> dict
         resp = await client.post("", json=json)
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", "5"))
-            await asyncio.sleep(retry_after * (2 ** attempt))
+            await asyncio.sleep(retry_after * (2**attempt))
             continue
         resp.raise_for_status()
         data = resp.json()
@@ -306,17 +308,13 @@ async def sync_sales_history(days: int = 90) -> int:
                 all_variant_ids = [b[3] for b in batch if b[3]]
 
                 if all_sku_codes:
-                    result = await session.execute(
-                        select(Sku).where(Sku.sku_code.in_(all_sku_codes))
-                    )
+                    result = await session.execute(select(Sku).where(Sku.sku_code.in_(all_sku_codes)))
                     for s in result.scalars().all():
                         if s.sku_code:
                             sku_by_code[s.sku_code] = s
 
                 if all_variant_ids:
-                    result = await session.execute(
-                        select(Sku).where(Sku.shopify_variant_id.in_(all_variant_ids))
-                    )
+                    result = await session.execute(select(Sku).where(Sku.shopify_variant_id.in_(all_variant_ids)))
                     for s in result.scalars().all():
                         sku_by_vid[s.shopify_variant_id] = s
 

@@ -2,12 +2,12 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from agent.db import Base
 from agent.models import *  # noqa: F401, F403 — ensure all models are loaded
+from alembic import context
 
 config = context.config
 if config.config_file_name is not None:

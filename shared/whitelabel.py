@@ -3,6 +3,7 @@
 Stores branding config (logo, colors, custom domain) per merchant.
 Serves branding via API and injects into frontend via /api/v1/config.
 """
+
 import logging
 from dataclasses import dataclass
 from typing import Any

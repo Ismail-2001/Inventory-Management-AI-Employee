@@ -38,9 +38,6 @@ def test_estimate_cost_none_defaults():
 
 @pytest.mark.asyncio
 async def test_log_llm_call_noop_on_none(monkeypatch):
-    called = []
-    original_factory = llm_module.async_session_factory
-
     class FakeFactory:
         def __call__(self):
             raise RuntimeError("should not be called")
@@ -54,12 +51,16 @@ async def test_log_llm_call_records_usage(monkeypatch):
     class FakeSession:
         def __init__(self):
             self.added = []
+
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, *a):
             return False
+
         def add(self, obj):
             self.added.append(obj)
+
         async def commit(self):
             pass
 

@@ -16,7 +16,7 @@ def calculate_mape(actual: list[float], predicted: list[float]) -> float:
     if not actual or len(actual) != len(predicted):
         return float("inf")
     errors = []
-    for a, p in zip(actual, predicted):
+    for a, p in zip(actual, predicted, strict=False):
         if a != 0:
             errors.append(abs((a - p) / a))
     if not errors:
@@ -81,9 +81,7 @@ async def test_historical_backtest():
     from agent.models import POOutcome
 
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(POOutcome).where(POOutcome.forecast_error_pct.isnot(None))
-        )
+        result = await session.execute(select(POOutcome).where(POOutcome.forecast_error_pct.isnot(None)))
         outcomes = result.scalars().all()
 
     if not outcomes:
@@ -93,8 +91,7 @@ async def test_historical_backtest():
     mean_error = sum(errors) / len(errors)
 
     assert mean_error <= MAPE_THRESHOLD, (
-        f"Historical MAPE {mean_error:.1f}% exceeds threshold {MAPE_THRESHOLD}% "
-        f"(based on {len(errors)} outcomes)"
+        f"Historical MAPE {mean_error:.1f}% exceeds threshold {MAPE_THRESHOLD}% (based on {len(errors)} outcomes)"
     )
 
 

@@ -63,9 +63,7 @@ def _make_outcome(error_pct=None, stockout=False):
 
 @pytest.mark.asyncio
 async def test_acceptance_rate_empty():
-    result = await metrics_module.calculate_acceptance_rate(
-        session_factory=FakeSessionFactory([])
-    )
+    result = await metrics_module.calculate_acceptance_rate(session_factory=FakeSessionFactory([]))
     assert result["total"] == 0
     assert result["accepted_as_is_pct"] == 0
     assert result["rejected_pct"] == 0
@@ -74,9 +72,7 @@ async def test_acceptance_rate_empty():
 @pytest.mark.asyncio
 async def test_acceptance_rate_all_approved_as_is():
     pos = [_make_po(POStatus.approved, edited=False) for _ in range(3)]
-    result = await metrics_module.calculate_acceptance_rate(
-        session_factory=FakeSessionFactory(pos)
-    )
+    result = await metrics_module.calculate_acceptance_rate(session_factory=FakeSessionFactory(pos))
     assert result["total"] == 3
     assert result["accepted_as_is"] == 3
     assert result["accepted_as_is_pct"] == 100.0
@@ -91,9 +87,7 @@ async def test_acceptance_rate_mixed():
         _make_po(POStatus.approved, edited=True),
         _make_po(POStatus.rejected),
     ]
-    result = await metrics_module.calculate_acceptance_rate(
-        session_factory=FakeSessionFactory(pos)
-    )
+    result = await metrics_module.calculate_acceptance_rate(session_factory=FakeSessionFactory(pos))
     assert result["total"] == 3
     assert result["accepted_as_is"] == 1
     assert result["accepted_as_is_pct"] == 33.3
@@ -105,9 +99,7 @@ async def test_acceptance_rate_mixed():
 
 @pytest.mark.asyncio
 async def test_forecast_error_summary_none_when_empty():
-    result = await metrics_module.calculate_forecast_error_summary(
-        session_factory=FakeSessionFactory([])
-    )
+    result = await metrics_module.calculate_forecast_error_summary(session_factory=FakeSessionFactory([]))
     assert result is None
 
 
@@ -118,9 +110,7 @@ async def test_forecast_error_summary_computes_stats():
         _make_outcome(error_pct=20.0, stockout=True),
         _make_outcome(error_pct=30.0, stockout=False),
     ]
-    result = await metrics_module.calculate_forecast_error_summary(
-        session_factory=FakeSessionFactory(outcomes)
-    )
+    result = await metrics_module.calculate_forecast_error_summary(session_factory=FakeSessionFactory(outcomes))
     assert result["count"] == 3
     assert result["mean_error_pct"] == 20.0
     assert result["min_error_pct"] == 10.0

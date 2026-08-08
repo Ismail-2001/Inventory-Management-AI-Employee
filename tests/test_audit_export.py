@@ -36,8 +36,12 @@ def test_s3_sign_deterministic():
         mock_dt.now.return_value = now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        _, h1 = export_module._s3_sign("PUT", "/k", {"Content-Type": "text/plain"}, b"body", "us-east-1", "b", "ak", "sk")
-        _, h2 = export_module._s3_sign("PUT", "/k", {"Content-Type": "text/plain"}, b"body", "us-east-1", "b", "ak", "sk")
+        _, h1 = export_module._s3_sign(
+            "PUT", "/k", {"Content-Type": "text/plain"}, b"body", "us-east-1", "b", "ak", "sk"
+        )
+        _, h2 = export_module._s3_sign(
+            "PUT", "/k", {"Content-Type": "text/plain"}, b"body", "us-east-1", "b", "ak", "sk"
+        )
 
     assert h1["Authorization"] == h2["Authorization"]
 
@@ -59,14 +63,17 @@ async def test_export_returns_0_when_no_entries(monkeypatch):
     class FakeResult:
         def scalars(self):
             return self
+
         def all(self):
             return []
 
     class FakeSession:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, *a):
             return False
+
         async def execute(self, q):
             return FakeResult()
 

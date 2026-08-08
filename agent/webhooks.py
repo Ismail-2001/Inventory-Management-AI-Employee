@@ -30,9 +30,7 @@ async def verify_shopify_webhook(request: Request) -> bytes:
     if not secret:
         raise HTTPException(status_code=401, detail="Webhook secret not configured")
 
-    expected_sig = base64.b64encode(
-        hmac.new(secret, body, hashlib.sha256).digest()
-    ).decode()
+    expected_sig = base64.b64encode(hmac.new(secret, body, hashlib.sha256).digest()).decode()
 
     if not hmac.compare_digest(expected_sig, hmac_header):
         raise HTTPException(status_code=401, detail="Invalid HMAC signature")
@@ -66,17 +64,21 @@ async def _mark_webhook_processed(event_id: str | None, event_type: str | None) 
 
 async def _enqueue_failed_webhook(event_id: str | None, event_type: str | None, payload_text: str, error: str) -> None:
     async with session_scope(async_session_factory) as session:
-        session.add(FailedWebhook(
-            event_id=event_id,
-            event_type=event_type,
-            payload_text=payload_text[:10000],
-            error=str(error)[:1000],
-            next_retry_at=datetime.now(UTC) + timedelta(minutes=5),
-        ))
+        session.add(
+            FailedWebhook(
+                event_id=event_id,
+                event_type=event_type,
+                payload_text=payload_text[:10000],
+                error=str(error)[:1000],
+                next_retry_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
         await session.commit()
 
 
-async def handle_webhook_event(request: Request, event_type: str, handler: Callable[[dict[str, Any]], Awaitable[None]]) -> dict[str, Any]:
+async def handle_webhook_event(
+    request: Request, event_type: str, handler: Callable[[dict[str, Any]], Awaitable[None]]
+) -> dict[str, Any]:
     event_id = request.headers.get("X-Shopify-Webhook-Id")
     if await _webhook_already_processed(event_id):
         return {"status": "ignored", "reason": "duplicate_webhook", "event_id": event_id}
@@ -86,7 +88,9 @@ async def handle_webhook_event(request: Request, event_type: str, handler: Calla
     try:
         await handler(payload)
     except Exception as exc:
-        await _enqueue_failed_webhook(event_id, event_type, body.decode() if isinstance(body, bytes) else str(body), str(exc))
+        await _enqueue_failed_webhook(
+            event_id, event_type, body.decode() if isinstance(body, bytes) else str(body), str(exc)
+        )
         raise
 
     await _mark_webhook_processed(event_id, event_type)
@@ -97,10 +101,12 @@ async def retry_failed_webhooks(max_retries: int = 3) -> None:
     now = datetime.now(UTC)
     async with session_scope(async_session_factory) as session:
         result = await session.execute(
-            select(FailedWebhook).where(
+            select(FailedWebhook)
+            .where(
                 FailedWebhook.next_retry_at <= now,
                 FailedWebhook.retry_count < max_retries,
-            ).limit(50)
+            )
+            .limit(50)
         )
         failed = result.scalars().all()
 
@@ -127,7 +133,7 @@ async def retry_failed_webhooks(max_retries: int = 3) -> None:
                 fresh = await session.get(FailedWebhook, fw_id)
                 if fresh:
                     fresh.retry_count += 1
-                    fresh.next_retry_at = datetime.now(UTC) + timedelta(minutes=5 * (2 ** fresh.retry_count))
+                    fresh.next_retry_at = datetime.now(UTC) + timedelta(minutes=5 * (2**fresh.retry_count))
                     await session.commit()
 
 
@@ -146,9 +152,7 @@ async def handle_order_create(payload: dict[str, Any]) -> None:
     line_items = payload.get("line_items", [])
     created_at = payload.get("created_at")
     order_date = (
-        datetime.fromisoformat(created_at.replace("Z", "+00:00")).date()
-        if created_at
-        else datetime.now(UTC).date()
+        datetime.fromisoformat(created_at.replace("Z", "+00:00")).date() if created_at else datetime.now(UTC).date()
     )
 
     sku_codes = [li.get("sku") for li in line_items if li.get("sku")]
@@ -166,9 +170,7 @@ async def handle_order_create(payload: dict[str, Any]) -> None:
             if not sku or quantity <= 0:
                 continue
 
-            stmt = pg_insert(SalesHistory).values(
-                sku_id=sku.id, date=order_date, units_sold=quantity
-            )
+            stmt = pg_insert(SalesHistory).values(sku_id=sku.id, date=order_date, units_sold=quantity)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["sku_id", "date"],
                 set_={"units_sold": SalesHistory.units_sold + stmt.excluded.units_sold},

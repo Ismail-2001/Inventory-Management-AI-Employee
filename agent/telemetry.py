@@ -42,6 +42,7 @@ def setup_telemetry() -> None:
     if otel_endpoint:
         try:
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
             exporter = OTLPSpanExporter(endpoint=otel_endpoint)
             provider.add_span_processor(BatchSpanProcessor(exporter))
         except Exception:

@@ -3,6 +3,7 @@
 Logs every action with actor, target, details, and timestamp.
 Writes to the `audit_log` table and optionally to structured JSON logs.
 """
+
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -67,8 +68,13 @@ async def log_audit_event(
 
     logger.info(
         "AUDIT: merchant=%s actor=%s/%s action=%s target=%s/%s details=%s",
-        merchant_id, actor_type, actor_id, action,
-        target_type, target_id, entry_details,
+        merchant_id,
+        actor_type,
+        actor_id,
+        action,
+        target_type,
+        target_id,
+        entry_details,
     )
 
 

@@ -68,9 +68,7 @@ async def list_merchant_keys(merchant_id: int) -> list[dict[str, Any]]:
     if merchant_id == 0:
         return []
     async with session_scope(async_session_factory) as session:
-        result = await session.execute(
-            select(Merchant).where(Merchant.id == merchant_id)
-        )
+        result = await session.execute(select(Merchant).where(Merchant.id == merchant_id))
         merchants = result.scalars().all()
     return [
         {

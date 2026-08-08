@@ -1,16 +1,17 @@
 """Seed a test supplier so POs have real cost data."""
+
 import asyncio
-from agent.db import async_session_factory
-from agent.models import Supplier, Sku
+
 from sqlalchemy import select
+
+from agent.db import async_session_factory
+from agent.models import Sku, Supplier
 
 
 async def main():
     async with async_session_factory() as session:
         # Find the Compare at Price Snowboard
-        result = await session.execute(
-            select(Sku).where(Sku.title == "The Compare at Price Snowboard").limit(1)
-        )
+        result = await session.execute(select(Sku).where(Sku.title == "The Compare at Price Snowboard").limit(1))
         sku = result.scalar_one_or_none()
         if not sku:
             print("SKU 'The Compare at Price Snowboard' not found!")
@@ -19,9 +20,7 @@ async def main():
         print(f"Found SKU: id={sku.id} title={sku.title!r} sku_code={sku.sku_code!r}")
 
         # Upsert supplier
-        existing = await session.execute(
-            select(Supplier).where(Supplier.name == "Test Supplier").limit(1)
-        )
+        existing = await session.execute(select(Supplier).where(Supplier.name == "Test Supplier").limit(1))
         supplier = existing.scalar_one_or_none()
 
         if supplier:

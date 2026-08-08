@@ -71,6 +71,10 @@ async def get_metrics(
     from datetime import timedelta
 
     since = date.today() - timedelta(days=days)
-    acceptance = await calculate_acceptance_rate(since=since, session_factory=async_session_factory_readonly or async_session_factory)
-    forecast = await calculate_forecast_error_summary(since=since, session_factory=async_session_factory_readonly or async_session_factory)
+    acceptance = await calculate_acceptance_rate(
+        since=since, session_factory=async_session_factory_readonly or async_session_factory
+    )
+    forecast = await calculate_forecast_error_summary(
+        since=since, session_factory=async_session_factory_readonly or async_session_factory
+    )
     return {"acceptance": acceptance, "forecast_error": forecast}

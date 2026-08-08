@@ -4,7 +4,9 @@ Enqueue a sync run and immediately return a task_id (HTTP 202).
 The worker processes tasks sequentially on the event loop.
 For multi-replica deployments, replace with ARQ/Celery + Redis.
 """
+
 import asyncio
+import contextlib
 import uuid
 from collections import OrderedDict
 from typing import Any
@@ -26,10 +28,8 @@ class BackgroundTaskQueue:
     async def stop(self) -> None:
         if self._worker:
             self._worker.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._worker
-            except asyncio.CancelledError:
-                pass
 
     async def enqueue(self, initial_state: dict[str, Any], config: dict[str, Any]) -> str:
         task_id = str(uuid.uuid4())
@@ -46,6 +46,7 @@ class BackgroundTaskQueue:
 
     def _emit_gauge(self) -> None:
         from shared.metrics import metrics
+
         metrics.gauge("task_queue_depth", self._queue.qsize())
         metrics.gauge("task_queue_results", len(self._results))
 

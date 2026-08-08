@@ -1,4 +1,3 @@
-
 import pytest
 
 from api.routes import purchase_orders
@@ -50,8 +49,12 @@ async def test_same_idempotency_key_only_changes_state_once(monkeypatch):
     monkeypatch.setattr(purchase_orders, "async_session_factory", fake_session_factory)
     monkeypatch.setattr(purchase_orders, "_approve_po_impl", fake_impl)
 
-    first = await purchase_orders._run_with_idempotency("same-key", "/api/v1/po/1/approve", lambda: fake_impl(1, "merchant", None))
-    second = await purchase_orders._run_with_idempotency("same-key", "/api/v1/po/1/approve", lambda: fake_impl(1, "merchant", None))
+    first = await purchase_orders._run_with_idempotency(
+        "same-key", "/api/v1/po/1/approve", lambda: fake_impl(1, "merchant", None)
+    )
+    second = await purchase_orders._run_with_idempotency(
+        "same-key", "/api/v1/po/1/approve", lambda: fake_impl(1, "merchant", None)
+    )
 
     assert first == second
     assert calls["count"] == 1

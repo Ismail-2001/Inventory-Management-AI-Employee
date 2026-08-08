@@ -8,7 +8,10 @@ from .inventory_agent import (
 )
 
 __all__ = [
-    "InventoryAgent", "agent",
-    "InventoryItem", "InventoryAnalysis",
-    "BulkAnalysisRequest", "BulkAnalysisResponse"
+    "InventoryAgent",
+    "agent",
+    "InventoryItem",
+    "InventoryAnalysis",
+    "BulkAnalysisRequest",
+    "BulkAnalysisResponse",
 ]

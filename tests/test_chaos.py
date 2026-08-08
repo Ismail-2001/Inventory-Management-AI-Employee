@@ -5,6 +5,7 @@ Postgres.  For live container-level chaos (killing Redis / disconnecting
 Postgres mid-request against the docker-compose stack) see
 ``chaos/chaos_runner.py``.
 """
+
 import asyncio
 import types
 
@@ -128,6 +129,7 @@ async def test_rate_limiter_configured_with_in_memory_fallback():
 async def test_task_queue_records_db_error_and_continues():
     """If Postgres dies mid-run, the async path records an error and the queue
     keeps serving subsequent tasks (no corruption of the queue or event loop)."""
+
     class SelectiveGraph:
         async def ainvoke(self, state: dict, config: dict) -> dict:
             thread_id = (config.get("configurable") or {}).get("thread_id")

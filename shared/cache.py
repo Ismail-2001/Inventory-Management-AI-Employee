@@ -5,6 +5,7 @@ Usage:
     await cache.set("key", value)
     value = await cache.get("key")
 """
+
 import time
 from collections import OrderedDict
 from typing import Any
@@ -52,6 +53,7 @@ def _create_forecast_cache() -> Any:
     if settings.redis_url:
         try:
             from shared.redis_cache import RedisCache
+
             return RedisCache(namespace="forecast", ttl_seconds=600)
         except Exception:
             pass

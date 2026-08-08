@@ -1,4 +1,5 @@
 """Tests for SSO, Audit, and White-Label Enterprise Features."""
+
 from unittest.mock import patch
 
 import pytest
@@ -9,6 +10,7 @@ from agent.sso import SSOSession, get_sso_providers, validate_email_domain
 from shared.whitelabel import MerchantBranding, clear_branding_cache
 
 # ── SSO Session Token Tests ──────────────────────────────────────────
+
 
 def test_sso_session_create_and_verify():
     session = SSOSession("test-secret-key")
@@ -56,6 +58,7 @@ def test_sso_session_rejects_garbage():
 
 # ── Email Domain Validation Tests ────────────────────────────────────
 
+
 def test_validate_email_domain_no_restrictions():
     assert validate_email_domain("user@example.com", []) is True
 
@@ -77,21 +80,25 @@ def test_validate_email_domain_multiple():
 
 # ── SSO Provider Config Tests ────────────────────────────────────────
 
+
 def test_get_sso_providers_empty_by_default():
-    with patch.object(settings, "sso_oidc_client_id", ""), \
-         patch.object(settings, "sso_saml_entity_id", ""):
+    with patch.object(settings, "sso_oidc_client_id", ""), patch.object(settings, "sso_saml_entity_id", ""):
         providers = get_sso_providers()
         assert providers == []
 
 
 def test_get_sso_providers_oidc():
-    with patch.object(settings, "sso_oidc_client_id", "client-123"), \
-         patch.object(settings, "sso_oidc_client_secret", "secret-456"), \
-         patch.object(settings, "sso_oidc_discovery_url", "https://accounts.google.com/.well-known/openid-configuration"), \
-         patch.object(settings, "sso_oidc_name", "Google"), \
-         patch.object(settings, "sso_saml_entity_id", ""), \
-         patch.object(settings, "sso_allowed_domains", "acme.com"), \
-         patch.object(settings, "public_api_url", "http://localhost:8002"):
+    with (
+        patch.object(settings, "sso_oidc_client_id", "client-123"),
+        patch.object(settings, "sso_oidc_client_secret", "secret-456"),
+        patch.object(
+            settings, "sso_oidc_discovery_url", "https://accounts.google.com/.well-known/openid-configuration"
+        ),
+        patch.object(settings, "sso_oidc_name", "Google"),
+        patch.object(settings, "sso_saml_entity_id", ""),
+        patch.object(settings, "sso_allowed_domains", "acme.com"),
+        patch.object(settings, "public_api_url", "http://localhost:8002"),
+    ):
         providers = get_sso_providers()
         assert len(providers) == 1
         assert providers[0].name == "Google"
@@ -100,6 +107,7 @@ def test_get_sso_providers_oidc():
 
 
 # ── Audit Log Tests ──────────────────────────────────────────────────
+
 
 class FakeAuditSession:
     def __init__(self):
@@ -168,6 +176,7 @@ async def test_legacy_log_function():
 
 # ── White-Label Branding Tests ───────────────────────────────────────
 
+
 def test_merchant_branding_defaults():
     branding = MerchantBranding(merchant_id=1)
     assert branding.primary_color == "#2563eb"
@@ -196,5 +205,6 @@ def test_clear_branding_cache():
 def test_get_branding_by_domain_no_match():
     clear_branding_cache()
     from shared.whitelabel import get_branding_for_domain
+
     result = get_branding_for_domain("nonexistent.com")
     assert result is None

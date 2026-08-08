@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from agent.audit import log
@@ -19,8 +19,7 @@ def _template_insight(acceptance: dict[str, Any], forecast: dict[str, Any] | lis
     ]
     if forecast and isinstance(forecast, dict):
         lines.append(
-            f"  Forecast error: mean {forecast['mean_error_pct']}%, "
-            f"stockout rate {forecast['stockout_rate']}%."
+            f"  Forecast error: mean {forecast['mean_error_pct']}%, stockout rate {forecast['stockout_rate']}%."
         )
     return "\n".join(lines)
 
@@ -64,7 +63,6 @@ async def _generate_insight(acceptance: dict[str, Any], forecast: dict[str, Any]
 
 
 async def run_reflection(week_start: date) -> list[dict[str, Any]]:
-    week_end = week_start + timedelta(days=7)
     acceptance = await calculate_acceptance_rate(since=week_start)
     forecast = await calculate_forecast_error_summary(since=week_start)
     forecast_for_insight: dict[str, Any] = forecast if forecast is not None else {}
@@ -75,16 +73,20 @@ async def run_reflection(week_start: date) -> list[dict[str, Any]]:
         ri = ReflectionInsight(
             week_start=week_start,
             insight_text=insight_text,
-            supporting_data={"acceptance": acceptance, "forecast": forecast_for_insight} if forecast_for_insight else {"acceptance": acceptance},
+            supporting_data={"acceptance": acceptance, "forecast": forecast_for_insight}
+            if forecast_for_insight
+            else {"acceptance": acceptance},
         )
         session.add(ri)
         await session.commit()
 
     await log(action="reflection_generated", details={"week_start": week_start.isoformat()})
 
-    return [{
-        "week_start": week_start.isoformat(),
-        "insight_text": insight_text,
-        "acceptance": acceptance,
-        "forecast": forecast_for_insight,
-    }]
+    return [
+        {
+            "week_start": week_start.isoformat(),
+            "insight_text": insight_text,
+            "acceptance": acceptance,
+            "forecast": forecast_for_insight,
+        }
+    ]

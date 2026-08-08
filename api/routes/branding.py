@@ -5,6 +5,7 @@ Endpoints:
     PUT  /api/v1/branding         — Update merchant branding
     GET  /api/v1/branding/{id}    — Get branding by merchant ID (admin)
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -73,7 +74,7 @@ async def update_my_branding(
     try:
         branding = await update_branding(merchant.id, update_data)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return _to_response(branding)
 

@@ -164,7 +164,7 @@ Unit Price: ${item.unit_price:.2f}
 Supplier Reliability: {item.supplier_reliability:.0%}
 On Order: {item.on_order} units
 Backordered: {item.backordered} units
-Last Restock: {item.last_restock_date or 'Unknown'}
+Last Restock: {item.last_restock_date or "Unknown"}
 
 Current status suggests: stockout in {days_of_stock:.0f} days at current rate.
 
@@ -263,8 +263,6 @@ Provide:
 
     def _rule_based_fallback(self, item: InventoryItem) -> InventoryAnalysis:
         days_of_stock = item.current_stock / max(item.daily_sales, 0.1)
-        reorder_point = item.daily_sales * item.lead_time_days * 1.5
-        safety_stock = item.daily_sales * item.lead_time_days * 0.5
 
         if days_of_stock < item.lead_time_days:
             urgency = "critical"

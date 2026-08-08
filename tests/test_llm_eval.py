@@ -6,6 +6,7 @@ These tests mock the DB layer and test pure node logic (risk, forecast math,
 ordering). The LLM-as-Judge scoring is available when a judge LLM is provided;
 without one, we use heuristic structural checks.
 """
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 from agent.forecast import exponential_smoothing
 from agent.ordering import build_reasoning_input, calculate_reorder_quantity
 from agent.risk import determine_risk_level
-from shared.eval_harness import EvalResult, EvalScenario, run_eval
+from shared.eval_harness import EvalResult, EvalScenario
 
 # ── Pure-logic eval scenarios (no DB required) ───────────────────────
 
@@ -159,8 +160,6 @@ def _run_ordering_pure(state: dict) -> dict:
 
 
 def _heuristic_score_risk(scenario: EvalScenario, output: dict) -> float:
-    stock = scenario.input_state.get("days_of_stock_remaining")
-    lead = scenario.input_state.get("lead_time_days", 7)
     level = output.get("risk_level", "")
 
     if scenario.name == "risk_critical_stockout":
@@ -205,11 +204,17 @@ SCENARIO_RUNNERS = {
 
 async def run_eval(scenario: EvalScenario, judge=None, runWithoutJudge: bool = False) -> EvalResult:
     import time
+
     start = time.monotonic()
 
     category = None
     for cat in SCENARIO_RUNNERS:
-        if any(s.name == scenario.name for s in (RISK_SCENARIOS if cat == "risk" else FORECAST_SCENARIOS if cat == "forecast" else ORDERING_SCENARIOS)):
+        if any(
+            s.name == scenario.name
+            for s in (
+                RISK_SCENARIOS if cat == "risk" else FORECAST_SCENARIOS if cat == "forecast" else ORDERING_SCENARIOS
+            )
+        ):
             category = cat
             break
 
@@ -220,10 +225,14 @@ async def run_eval(scenario: EvalScenario, judge=None, runWithoutJudge: bool = F
             output = await scenario.node_fn(scenario.input_state)
         except Exception as exc:
             return EvalResult(
-                scenario=scenario.name, score=0.0, passed=False,
+                scenario=scenario.name,
+                score=0.0,
+                passed=False,
                 reasoning=f"Node raised exception: {exc}",
                 latency_ms=(time.monotonic() - start) * 1000,
-                output={}, judge_model="none", error=str(exc),
+                output={},
+                judge_model="none",
+                error=str(exc),
             )
     else:
         output = runner(scenario.input_state)
@@ -248,31 +257,26 @@ async def run_eval(scenario: EvalScenario, judge=None, runWithoutJudge: bool = F
 
 # ── Tests ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scenario", RISK_SCENARIOS, ids=[s.name for s in RISK_SCENARIOS])
 async def test_risk_eval(scenario: EvalScenario):
     result = await run_eval(scenario, runWithoutJudge=True)
-    assert result.passed, (
-        f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
-    )
+    assert result.passed, f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scenario", FORECAST_SCENARIOS, ids=[s.name for s in FORECAST_SCENARIOS])
 async def test_forecast_eval(scenario: EvalScenario):
     result = await run_eval(scenario, runWithoutJudge=True)
-    assert result.passed, (
-        f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
-    )
+    assert result.passed, f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scenario", ORDERING_SCENARIOS, ids=[s.name for s in ORDERING_SCENARIOS])
 async def test_ordering_eval(scenario: EvalScenario):
     result = await run_eval(scenario, runWithoutJudge=True)
-    assert result.passed, (
-        f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
-    )
+    assert result.passed, f"[{result.scenario}] FAILED (score={result.score:.2f}): {result.reasoning}"
 
 
 @pytest.mark.asyncio
@@ -294,6 +298,7 @@ async def test_full_pipeline_eval():
 
 
 # ── Additional pure-function eval assertions ────────────────────────
+
 
 def test_risk_level_deterministic():
     assert determine_risk_level(3.0, 14)[0] == "critical"
@@ -318,9 +323,15 @@ def test_ordering_deterministic():
 
 def test_build_reasoning_input_structure():
     result = build_reasoning_input(
-        sku_title="Test", sku_code="T-001", current_stock=10,
-        predicted_daily_demand=5.0, days_of_stock_remaining=2.0,
-        lead_time_days=7, risk_level="critical", reorder_quantity=100, moq=10,
+        sku_title="Test",
+        sku_code="T-001",
+        current_stock=10,
+        predicted_daily_demand=5.0,
+        days_of_stock_remaining=2.0,
+        lead_time_days=7,
+        risk_level="critical",
+        reorder_quantity=100,
+        moq=10,
     )
     assert "product" in result
     assert "inventory" in result

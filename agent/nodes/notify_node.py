@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from typing import Any
 
@@ -42,9 +43,7 @@ def _build_pending_summary(state: dict[str, Any]) -> str:
         for po in pos[:3]:
             approve_token = sign_token(po["po_id"], "approve")
             reject_token = sign_token(po["po_id"], "reject")
-            summary_lines.append(
-                f"  PO #{po['po_id']}: {po['quantity']} units, ${po['total_cost']:.2f}"
-            )
+            summary_lines.append(f"  PO #{po['po_id']}: {po['quantity']} units, ${po['total_cost']:.2f}")
             summary_lines.append(f"    Approve: {domain}/api/v1/po/action?token={approve_token}")
             summary_lines.append(f"    Reject:  {domain}/api/v1/po/action?token={reject_token}&reason=")
 
@@ -73,10 +72,8 @@ async def notify_pending_node(state: dict[str, Any]) -> dict[str, Any]:
         return {**state, "notification_summary": ""}
 
     if settings.slack_webhook_url:
-        try:
+        with contextlib.suppress(Exception):
             await send_slack(settings.slack_webhook_url, summary)
-        except Exception:
-            pass
 
     return {**state, "notification_summary": summary}
 
@@ -88,10 +85,8 @@ async def notify_confirmed_node(state: dict[str, Any]) -> dict[str, Any]:
         return {**state}
 
     if settings.slack_webhook_url:
-        try:
+        with contextlib.suppress(Exception):
             await send_slack(settings.slack_webhook_url, summary)
-        except Exception:
-            pass
 
     return {**state, "confirmation_summary": summary}
 
