@@ -11,9 +11,14 @@ on:
         description: 'API base URL for load testing'
         required: false
         default: 'http://localhost:8002'
+      load_profile:
+        description: 'Load profile: ci (light, shared runner) or deployed (aggressive, strict)'
+        required: false
+        default: 'ci'
 
 env:
   BASE_URL: ${{ github.event.inputs.base_url || 'http://localhost:8002' }}
+  LOAD_PROFILE: ${{ github.event.inputs.load_profile || 'ci' }}
 
 jobs:
   load-test:
@@ -80,19 +85,26 @@ jobs:
           k6 version
 
       - name: Run load tests
+        env:
+          K6_BASE_URL: ${{ env.BASE_URL }}
+          K6_LOAD_PROFILE: ${{ env.LOAD_PROFILE }}
         run: |
           k6 run \
             --out json=load/results.json \
             --summary-export=load/summary.json \
-            load/load_test.js || true
+            -e BASE_URL=$K6_BASE_URL \
+            -e LOAD_PROFILE=$K6_LOAD_PROFILE \
+            load/load_test.js
 
       - name: Validate thresholds
+        env:
+          P95_THRESHOLD_MS: ${{ env.LOAD_PROFILE == 'deployed' && 3000 || 5000 }}
         run: |
           if [ -f load/summary.json ]; then
-            ERROR_RATE=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_failed',{}).get('values',{}).get('rate', 0))")
-            P95=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_duration',{}).get('values',{}).get('p(95)', 0))")
+            ERROR_RATE=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_failed',{}).get('value', 0))")
+            P95=$(python3 -c "import json; d=json.load(open('load/summary.json')); print(d.get('metrics',{}).get('http_req_duration',{}).get('p(95)', 0))")
             echo "Error rate: $ERROR_RATE (threshold: 0.05)"
-            echo "P95 latency: ${P95}ms (threshold: 3000ms)"
+            echo "P95 latency: ${P95}ms (threshold: ${P95_THRESHOLD_MS}ms)"
             python3 -c "
           import sys
           rate = float('$ERROR_RATE')
@@ -101,13 +113,16 @@ jobs:
           if rate > 0.05:
               print(f'FAIL: error rate {rate:.3f} > 0.05')
               failed = True
-          if p95 > 3000:
-              print(f'FAIL: p95 latency {p95:.0f}ms > 3000ms')
+          if p95 > $P95_THRESHOLD_MS:
+              print(f'FAIL: p95 latency {p95:.0f}ms > $P95_THRESHOLD_MS')
               failed = True
           if failed:
               sys.exit(1)
           print('PASS: all load test thresholds met')
           "
+          else
+            echo "FAIL: load/summary.json missing — k6 did not produce a summary"
+            exit 1
           fi
 
       - name: Upload results

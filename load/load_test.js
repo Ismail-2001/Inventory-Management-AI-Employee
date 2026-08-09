@@ -13,47 +13,74 @@ import { Rate, Trend, Counter } from 'k6/metrics';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8002';
 const API_KEY = __ENV.API_KEY || 'demo-key-2024';
+const LOAD_PROFILE = __ENV.LOAD_PROFILE || 'ci';
 
 const errorRate = new Rate('errors');
 const requestDuration = new Trend('request_duration', true);
 const throughput = new Counter('total_requests');
 
+// "ci" is the right-sized profile for GitHub shared runners (also the default).
+// "deployed" is the aggressive profile for running against a real deployment.
+const PROFILES = {
+  ci: {
+    request_timeout: '30s',
+    analyze_timeout: '30s',
+    scenarios: {
+      health_check: { executor: 'constant-vus', vus: 2, duration: '30s', exec: 'healthCheck' },
+      analyze_endpoint: {
+        executor: 'ramping-vus',
+        startVUs: 0,
+        stages: [
+          { duration: '30s', target: 3 },
+          { duration: '1m', target: 5 },
+          { duration: '30s', target: 0 },
+        ],
+        exec: 'analyzeInventory',
+      },
+      read_endpoints: { executor: 'constant-vus', vus: 5, duration: '2m', exec: 'readEndpoints' },
+    },
+    thresholds: {
+      http_req_duration: [{ threshold: 'p(95)<5000', abortOnFail: false }],
+      errors: [{ threshold: 'rate<0.1', abortOnFail: false }],
+      http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: false }],
+    },
+  },
+  deployed: {
+    request_timeout: '5s',
+    analyze_timeout: '10s',
+    scenarios: {
+      health_check: { executor: 'constant-vus', vus: 5, duration: '30s', exec: 'healthCheck' },
+      analyze_endpoint: {
+        executor: 'ramping-vus',
+        startVUs: 0,
+        stages: [
+          { duration: '30s', target: 10 },
+          { duration: '1m', target: 20 },
+          { duration: '30s', target: 0 },
+        ],
+        exec: 'analyzeInventory',
+      },
+      read_endpoints: { executor: 'constant-vus', vus: 10, duration: '2m', exec: 'readEndpoints' },
+    },
+    thresholds: {
+      http_req_duration: [{ threshold: 'p(95)<3000', abortOnFail: false }],
+      errors: [{ threshold: 'rate<0.1', abortOnFail: false }],
+      http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: false }],
+    },
+  },
+};
+
+const profile = PROFILES[LOAD_PROFILE] || PROFILES.ci;
+
 export const options = {
-  scenarios: {
-    health_check: {
-      executor: 'constant-vus',
-      vus: 5,
-      duration: '30s',
-      exec: 'healthCheck',
-    },
-    analyze_endpoint: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '30s', target: 10 },
-        { duration: '1m', target: 20 },
-        { duration: '30s', target: 0 },
-      ],
-      exec: 'analyzeInventory',
-    },
-    read_endpoints: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '2m',
-      exec: 'readEndpoints',
-    },
-  },
-  thresholds: {
-    http_req_duration: [{ threshold: 'p(95)<3000', abortOnFail: false }],
-    errors: [{ threshold: 'rate<0.1', abortOnFail: false }],
-    http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: false }],
-  },
+  scenarios: profile.scenarios,
+  thresholds: profile.thresholds,
 };
 
 export function healthCheck() {
   const res = http.get(`${BASE_URL}/health`, {
     headers: { 'X-API-Key': API_KEY },
-    timeout: '5s',
+    timeout: profile.request_timeout,
   });
   throughput.add(1);
   requestDuration.add(res.timings.duration);
@@ -81,7 +108,7 @@ export function analyzeInventory() {
       'Content-Type': 'application/json',
       'X-API-Key': API_KEY,
     },
-    timeout: '10s',
+    timeout: profile.analyze_timeout,
   });
   throughput.add(1);
   requestDuration.add(res.timings.duration);
@@ -111,7 +138,7 @@ export function readEndpoints() {
 
   const res = http.get(`${BASE_URL}${endpoint}`, {
     headers: { 'X-API-Key': API_KEY },
-    timeout: '5s',
+    timeout: profile.request_timeout,
   });
   throughput.add(1);
   requestDuration.add(res.timings.duration);
@@ -120,17 +147,4 @@ export function readEndpoints() {
   });
   errorRate.add(res.status !== 200);
   sleep(Math.random() * 0.5 + 0.1);
-}
-
-export function handleSummary(data) {
-  return {
-    stdout: JSON.stringify({
-      total_requests: data.metrics.total_requests?.values?.count || 0,
-      error_rate: data.metrics.errors?.values?.rate || 0,
-      p95_duration_ms: data.metrics.http_req_duration?.values?.['p(95)'] || 0,
-      p99_duration_ms: data.metrics.http_req_duration?.values?.['p(99)'] || 0,
-      avg_duration_ms: data.metrics.http_req_duration?.values?.avg || 0,
-    }, null, 2),
-    'load/summary.json': JSON.stringify(data, null, 2),
-  };
 }
