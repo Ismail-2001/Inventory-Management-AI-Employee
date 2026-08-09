@@ -237,6 +237,8 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
       - name: Log in to registry
         uses: docker/login-action@v3
         with:
