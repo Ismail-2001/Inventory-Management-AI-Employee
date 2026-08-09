@@ -15,7 +15,9 @@ RUN apt-get update \
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade "pip>=26.1.2" \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y pip \
+    && rm -rf /root/.cache/pip
 
 COPY . .
 COPY --from=frontend --chown=appuser:appuser /build/dist inventory-frontend/dist
