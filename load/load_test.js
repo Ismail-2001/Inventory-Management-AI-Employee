@@ -117,7 +117,7 @@ export function analyzeInventory() {
     'analyze: has recommendation': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return body.recommendation !== undefined || body.action !== undefined;
+        return body.recommended_action !== undefined;
       } catch {
         return false;
       }
