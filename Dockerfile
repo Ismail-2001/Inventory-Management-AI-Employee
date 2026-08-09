@@ -14,7 +14,8 @@ RUN apt-get update \
     && groupadd -r appuser && useradd -r -g appuser appuser
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade "pip>=26.1.2" \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 COPY --from=frontend --chown=appuser:appuser /build/dist inventory-frontend/dist
