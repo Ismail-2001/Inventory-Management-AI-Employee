@@ -39,6 +39,7 @@ limiter = Limiter(
     storage_uri=storage_uri,
     in_memory_fallback_enabled=True,
 )
+limiter.enabled = settings.rate_limit_enabled
 
 
 def add_rate_limit_headers(response: Response, request: Request, limit: str) -> None:

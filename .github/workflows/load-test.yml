@@ -67,6 +67,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           AGENT_API_KEY: demo-key-2024
           ENVIRONMENT: development
+          RATE_LIMIT_ENABLED: "false"
         run: |
           python -m uvicorn api.main:app --host 0.0.0.0 --port 8002 &
           sleep 5
@@ -74,11 +75,9 @@ jobs:
 
       - name: Install k6
         run: |
-          sudo gpg -k
-          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
-          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update
-          sudo apt-get install k6 -y
+          curl -fsSL https://github.com/grafana/k6/releases/download/v2.1.0/k6-v2.1.0-linux-amd64.deb -o /tmp/k6.deb
+          sudo dpkg -i /tmp/k6.deb
+          k6 version
 
       - name: Run load tests
         run: |

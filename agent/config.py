@@ -56,6 +56,10 @@ class Settings:
 
     redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
 
+    rate_limit_enabled: bool = field(
+        default_factory=lambda: os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    )
+
     deployment_region: str = field(default_factory=lambda: os.getenv("DEPLOYMENT_REGION", "local"))
 
     audit_s3_bucket: str = field(default_factory=lambda: os.getenv("AUDIT_S3_BUCKET", ""))
