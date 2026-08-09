@@ -50,6 +50,12 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://inventory:inventory@localhost:5432/inventory_agent
+      CHECKPOINTER_DATABASE_URL: postgresql://inventory:inventory@localhost:5432/inventory_agent
+      ENVIRONMENT: testing
+      ALLOW_DEMO_KEY: 'true'
+      AGENT_API_KEY: demo-key-2024
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

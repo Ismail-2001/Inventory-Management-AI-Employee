@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from agent.config import settings
 from agent.db import async_session_factory, engine
-from agent.models import Forecast, Merchant, PurchaseOrder, RiskAlert, Sku, Supplier
+from agent.models import Forecast, Merchant, PurchaseOrder, RiskAlert, SalesHistory, Sku, Supplier
 
 pytestmark = [
     pytest.mark.skipif(
@@ -32,7 +32,7 @@ async def _clean_tables():
     """Reset tables between tests for isolation."""
     cleanup_engine = create_async_engine(settings.database_url)
     async with cleanup_engine.begin() as conn:
-        for table in ("risk_alerts", "forecasts", "purchase_orders", "suppliers", "skus", "merchants"):
+        for table in ("risk_alerts", "forecasts", "purchase_orders", "sales_history", "suppliers", "skus", "merchants"):
             await conn.execute(text(f"DELETE FROM {table}"))
     await cleanup_engine.dispose()
     await engine.dispose()
@@ -55,6 +55,21 @@ async def _seed_sku(session: AsyncSession, merchant_id: int = 0) -> Sku:
         current_stock=10,
     )
     session.add(sku)
+    await session.flush()
+    # Seed ~30 days of sales history so the forecast/risk pipeline produces
+    # a meaningful result even when Shopify sync is unavailable (CI has no
+    # SHOPIFY_STORE_DOMAIN, so sync_node skips the live sync entirely).
+    from datetime import date, timedelta
+
+    today = date.today()
+    for offset in range(30):
+        session.add(
+            SalesHistory(
+                sku_id=sku.id,
+                date=today - timedelta(days=offset),
+                units_sold=2,
+            )
+        )
     await session.commit()
     await session.refresh(sku)
     return sku

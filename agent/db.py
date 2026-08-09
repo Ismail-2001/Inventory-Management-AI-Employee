@@ -165,7 +165,10 @@ def create_checkpointer() -> AsyncPostgresSaver:
         max_size=5,
         open=True,
         timeout=30,
-        kwargs={"options": "-c statement_timeout=30000"},
+        kwargs={
+            "autocommit": True,
+            "options": "-c statement_timeout=30000",
+        },
     )
     saver = AsyncPostgresSaver(pool)  # type: ignore[arg-type]
     saver.setup()
