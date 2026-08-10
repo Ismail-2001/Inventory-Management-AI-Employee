@@ -22,7 +22,11 @@ bash rotate-credentials.sh
 # 2. Update .env with new values
 
 # 3. Restart
+# Development:
 docker compose down && docker compose up -d --build
+# Production (two-file layering):
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 ### Git history audit
