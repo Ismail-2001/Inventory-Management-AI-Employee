@@ -4,6 +4,78 @@ This runbook covers how to detect, diagnose, and recover from production inciden
 for the Inventory Agent service. It is written for the on-call engineer with no
 prior knowledge of the codebase.
 
+## 0. Releases, Rollback & Backups
+
+### 0.1 How releases are versioned
+
+The project uses [Semantic Versioning](https://semver.org). Every release is a git
+tag (`v1.0.0`, `v1.1.0`, ...) and a matching container image tag pushed to GHCR
+(`ghcr.io/inventory-agent/inventory-agent:<tag>`). See `CHANGELOG.md` for what
+changed in each release. The version exposed by `GET /health` comes from
+`agent/__init__.py` (`__version__`).
+
+### 0.2 Deploying a release
+
+```bash
+# Pull and run a pinned image tag (never `latest` for prod rollbacks)
+IMAGE_TAG=v1.0.0 DOMAIN=inventory.yourcompany.com \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --pull always
+```
+
+### 0.3 Rolling back
+
+A rollback is a versioned redeploy. Because `migrate` runs `alembic upgrade head`
+on startup, **a downgrade requires a matching DB downgrade first**:
+
+1. Check the current DB revision:
+   ```bash
+   docker compose exec postgres psql -U inventory -d inventory_agent -c "SELECT * FROM alembic_version;"
+   ```
+2. If the bad release **did not** run migrations, just redeploy the previous tag:
+   ```bash
+   IMAGE_TAG=v0.9.0 DOMAIN=inventory.yourcompany.com \
+     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --pull always
+   ```
+3. If it **did** run migrations, downgrade the DB **before** starting the old image:
+   ```bash
+   docker compose run --rm migrate alembic downgrade -1
+   IMAGE_TAG=v0.9.0 DOMAIN=inventory.yourcompany.com \
+     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --pull always
+   ```
+4. Verify: `curl -sf https://inventory.yourcompany.com/health` returns the old version.
+
+### 0.4 Backups & restore
+
+The `backup` compose service dumps Postgres nightly (custom format, gzip) into the
+`backups` volume and prunes files older than `BACKUP_RETENTION` days. On-call must
+periodically **verify backups restore successfully** — a backup that never restores
+is not a backup.
+
+Restore drill (destructive — do this on a scratch DB first):
+
+```bash
+# List backups
+docker compose exec backup sh -c 'ls -la /backups'
+
+# Restore a dump into a scratch database
+docker compose exec postgres psql -U inventory -d inventory_agent_restore \
+  -c "SELECT 1" # ensure scratch DB exists
+docker compose exec backup sh -c \
+  'PGPASSWORD=$POSTGRES_PASSWORD pg_restore -h postgres -U $POSTGRES_USER \
+   -d inventory_agent_restore --clean --if-exists /backups/inventory-agent-<TIMESTAMP>.dump'
+
+# Verify row counts match the primary database
+docker compose exec postgres psql -U inventory -d inventory_agent_restore \
+  -c "SELECT (SELECT count(*) FROM skus) AS skus, (SELECT count(*) FROM purchase_orders) AS pos;"
+```
+
+Standalone scripted backup/restore (uses `DATABASE_URL` from the environment):
+
+```bash
+scripts/backup-db.sh          # writes ./backups/inventory-agent-<ts>.sql.gz
+scripts/restore-db.sh ./backups/inventory-agent-<ts>.sql.gz
+```
+
 ## 1. Service Overview & Topology
 
 | Component | Container | Port | Purpose |

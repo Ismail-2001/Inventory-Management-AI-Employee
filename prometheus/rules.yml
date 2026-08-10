@@ -67,7 +67,7 @@ groups:
           severity: warning
         annotations:
           summary: "Database connection pool near exhaustion"
-          description: "The async engine pool (size 5 + overflow 10) is nearly exhausted."
+          description: "The async engine pool is nearly exhausted. Default pool is size 5 + overflow 10 (tunable via DB_POOL_SIZE / DB_POOL_MAX_OVERFLOW)."
 
       - alert: TaskQueueBacklog
         expr: task_queue_depth > 10

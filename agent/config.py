@@ -15,6 +15,9 @@ class Settings:
 
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
 
+    db_pool_size: int = field(default_factory=lambda: int(os.getenv("DB_POOL_SIZE", "5")))
+    db_pool_max_overflow: int = field(default_factory=lambda: int(os.getenv("DB_POOL_MAX_OVERFLOW", "10")))
+
     checkpointer_database_url: str = field(
         default_factory=lambda: os.getenv(
             "CHECKPOINTER_DATABASE_URL",

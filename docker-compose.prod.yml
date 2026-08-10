@@ -65,6 +65,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # In production the monitoring stack must not bind ports on the host:
+  # Prometheus and Alertmanager are reached over the private compose network.
+  prometheus:
+    ports: []
+    expose:
+      - "9090"
+    depends_on:
+      - postgres-exporter
+      - redis-exporter
+    restart: unless-stopped
+
+  alertmanager:
+    ports: []
+    expose:
+      - "9093"
+    restart: unless-stopped
+
 volumes:
   caddy_data:
   caddy_config:

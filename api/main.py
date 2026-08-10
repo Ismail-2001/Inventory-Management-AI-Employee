@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -33,10 +33,8 @@ from agent.telemetry import setup_telemetry
 
 setup_telemetry()
 
-from agent.auth import verify_api_key
 from agent.config import settings
-from agent.inventory_agent import BulkAnalysisRequest, BulkAnalysisResponse, InventoryAnalysis, InventoryItem, agent
-from api.rate_limit import _get_tier_limit, limiter
+from api.rate_limit import limiter
 from api.routes.operations import router as ops_router
 from api.routes.purchase_orders import router as po_router
 from api.routes.run_sync import router as run_sync_router
@@ -276,10 +274,12 @@ async def frontend_config() -> dict[str, Any]:
 
 @app.get("/health")
 async def health(request: Request) -> dict[str, Any]:
+    from agent import __version__
+
     result: dict[str, Any] = {
         "status": "healthy",
         "agent": "inventory",
-        "version": "1.0.0",
+        "version": __version__,
         "region": settings.deployment_region,
         "provider": _get_provider(),
         "model": settings.model_name,
@@ -493,63 +493,6 @@ app.add_middleware(InflightMiddleware)
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "inventory-frontend" / "dist"
 if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
-
-
-@app.post("/api/v1/analyze", response_model=InventoryAnalysis, deprecated=True)
-@limiter.limit(_get_tier_limit)
-async def analyze_inventory(
-    request: Request, item: InventoryItem, x_api_key: str = Depends(verify_api_key)
-) -> InventoryAnalysis:
-    """
-    DEPRECATED: this is the original single-shot demo endpoint, kept only
-    because tests/test_agent.py still exercises the underlying agent module.
-    New integrations should use POST /api/v1/run-sync, which runs the real
-    LangGraph pipeline (sync -> forecast -> risk -> po_draft -> notify)
-    against actual Shopify data instead of a manually-posted single item.
-
-    Example:
-    {
-        "product_id": "SKU-001",
-        "name": "Wireless Headphones",
-        "current_stock": 150,
-        "daily_sales": 8.5,
-        "lead_time_days": 7,
-        "unit_cost": 25.00,
-        "unit_price": 79.99,
-        "category": "electronics"
-    }
-    """
-    try:
-        result = await agent.analyze(item)
-        return result
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
-
-
-@app.post("/api/v1/bulk", response_model=BulkAnalysisResponse, deprecated=True)
-@limiter.limit(_get_tier_limit)
-async def analyze_bulk(
-    request: Request, request_body: BulkAnalysisRequest, x_api_key: str = Depends(verify_api_key)
-) -> BulkAnalysisResponse:
-    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
-    try:
-        result = await agent.analyze_bulk(request_body.items)
-        return result
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
-
-
-@app.post("/api/v1/forecast", deprecated=True)
-@limiter.limit(_get_tier_limit)
-async def forecast_demand(
-    request: Request, item: InventoryItem, x_api_key: str = Depends(verify_api_key)
-) -> dict[str, Any]:
-    """DEPRECATED: see /api/v1/analyze. Use /api/v1/run-sync instead."""
-    try:
-        result = await agent.forecast_demand(item)
-        return result
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 if __name__ == "__main__":

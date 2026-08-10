@@ -7,6 +7,8 @@ from .inventory_agent import (
     agent,
 )
 
+__version__ = "1.0.0"
+
 __all__ = [
     "InventoryAgent",
     "agent",
@@ -14,4 +16,5 @@ __all__ = [
     "InventoryAnalysis",
     "BulkAnalysisRequest",
     "BulkAnalysisResponse",
+    "__version__",
 ]

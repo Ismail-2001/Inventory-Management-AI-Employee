@@ -70,8 +70,8 @@ def _setup_pool_monitoring(engine: AsyncEngine) -> None:
 engine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_pool_max_overflow,
     pool_recycle=3600,
     pool_pre_ping=True,
     pool_timeout=30,

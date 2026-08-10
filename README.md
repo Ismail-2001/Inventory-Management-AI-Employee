@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 7+" />
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/tests-195%20passing-22c55e?style=flat-square" alt="195 Tests" />
+  <img src="https://img.shields.io/badge/tests-232%20passing-22c55e?style=flat-square" alt="232 Tests" />
   <img src="https://img.shields.io/badge/license-proprietary-F05032?style=flat-square" alt="License" />
 </p>
 
@@ -194,7 +194,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — lint → test → eval → load test → Docker push |
-| **Testing** | 195 tests — backend unit/integration/eval/contracts + frontend Vitest + Playwright E2E |
+| **Testing** | 232 tests — backend unit/integration/eval/contracts (162) + frontend Vitest (53) + Playwright E2E (17) |
 
 ---
 
@@ -370,6 +370,9 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 |---|---|---|
 | `DATABASE_READ_URL` | — | Read-replica connection for analytics queries |
 | `CHECKPOINTER_DATABASE_URL` | (derived) | Must be separate from `DATABASE_URL` in production |
+| `DB_POOL_SIZE` | `5` | Async SQLAlchemy pool size (raise for high-concurrency production) |
+| `DB_POOL_MAX_OVERFLOW` | `10` | Overflow connections beyond the pool size |
+| `RATE_LIMIT_ENABLED` | `true` | Set `false` only for load testing |
 | `DEPLOYMENT_REGION` | `local` | Region label visible in `/health` |
 | `AUDIT_S3_BUCKET` | — | S3 bucket for nightly audit log export (JSONL) |
 | `AUDIT_S3_REGION` | `us-east-1` | S3 region |
@@ -400,10 +403,21 @@ docker compose up -d --build
 ### Production
 
 ```bash
-DOMAIN=inventory.yourcompany.com docker compose -f docker-compose.prod.yml up -d --build
+# docker-compose.prod.yml layers on top of the base compose file, which
+# defines postgres, redis, and the Prometheus/Alertmanager monitoring stack.
+DOMAIN=inventory.yourcompany.com docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 **Architecture**: `Browser → HTTPS → Caddy (auto TLS) → FastAPI (internal :8002) → PostgreSQL + Redis`
+
+**Monitoring**: Prometheus scrapes the API, Postgres, and Redis; Alertmanager routes
+alerts (see `prometheus/rules.yml`). In production these run on the private compose
+network (no host ports). To view them, tunnel or expose explicitly, e.g.:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec prometheus \
+  wget -qO- http://localhost:9090/api/v1/alerts
+```
 
 ### Production Checklist
 
@@ -416,9 +430,12 @@ DOMAIN=inventory.yourcompany.com docker compose -f docker-compose.prod.yml up -d
 - [ ] Configure `SLACK_WEBHOOK_URL` for pipeline notifications
 - [ ] Set `SHOPIFY_WEBHOOK_SECRET` for webhook verification
 - [ ] Configure `DOMAIN` for automatic TLS and HSTS
+- [ ] Configure `SLACK_WEBHOOK_URL` in `prometheus/alertmanager.yml` for alert notifications
+- [ ] Verify nightly backup restores successfully (see `docs/RUNBOOK.md` §0.4)
 - [ ] (Optional) Configure SSO via `SSO_OIDC_*` environment variables
 - [ ] (Optional) Set `DATABASE_READ_URL` for read-replica offloading
 - [ ] (Optional) Configure `AUDIT_S3_*` for compliance-grade audit logging
+- [ ] (Optional) Raise `DB_POOL_SIZE`/`DB_POOL_MAX_OVERFLOW` for high-concurrency traffic
 
 ---
 
@@ -448,7 +465,7 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Backend — full test suite (142 tests)
+# Backend — full test suite (162 tests)
 pytest tests/ -v
 
 # Backend — unit tests only (no external dependencies)
@@ -488,14 +505,14 @@ k6 run load/load_test.js
 BASE_URL=http://localhost:8002 k6 run load/load_test.js
 ```
 
-**Thresholds**: p95 < 3s, error rate < 5%, failure rate < 10%
+**Thresholds**: ci profile — p95 < 5s, error rate < 5%; deployed profile — p95 < 3s, error rate < 5%
 
 ### CI Pipeline
 
 Every push to `main`:
 
 1. **Lint**: Ruff (Python code style)
-2. **Backend Tests**: 142 tests with PostgreSQL service container
+2. **Backend Tests**: 162 tests with PostgreSQL service container
 3. **Eval**: Forecast accuracy + LLM-as-Judge quality scoring
 4. **Frontend Tests**: 53 Vitest unit tests + production build
 5. **Build**: Docker image (multi-stage)
@@ -647,7 +664,7 @@ inventory-agent/
 │   ├── src/                  # Components, pages, utilities
 │   ├── e2e/                  # Playwright E2E tests
 │   └── vitest.config.ts      # Unit test config
-├── tests/                    # 142 backend test cases
+├── tests/                    # 162 backend test cases
 ├── alembic/                  # Database migrations
 ├── load/                     # k6 load tests
 ├── docker-compose.yml        # Development environment
@@ -673,7 +690,7 @@ inventory-agent/
 | **Frontend Tests** | Complete (53 tests) | Component-level coverage expansion |
 | **E2E Tests** | Complete (Playwright) | Cross-browser testing (Firefox, WebKit) |
 | **Graceful Shutdown** | Complete | Signal handling, inflight drain, connection cleanup |
-| **Monitoring Alerts** | — | Prometheus alerting rules + PagerDuty |
+| **Monitoring Alerts** | Complete (Prometheus + Alertmanager) | PagerDuty receiver integration |
 | **Multi-Warehouse** | — | Location-aware inventory tracking |
 | **Multi-Channel** | — | Amazon SP-API integration |
 

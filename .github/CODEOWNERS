@@ -1,0 +1,4 @@
+# Default owners for everything in the repo.
+# GitHub will require a review from an owner before a PR touching these
+# files can be merged when branch protection is enabled.
+* @Ismail-2001

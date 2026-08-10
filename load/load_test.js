@@ -24,10 +24,9 @@ const throughput = new Counter('total_requests');
 const PROFILES = {
   ci: {
     request_timeout: '30s',
-    analyze_timeout: '30s',
     scenarios: {
       health_check: { executor: 'constant-vus', vus: 2, duration: '30s', exec: 'healthCheck' },
-      analyze_endpoint: {
+      run_sync: {
         executor: 'ramping-vus',
         startVUs: 0,
         stages: [
@@ -35,7 +34,7 @@ const PROFILES = {
           { duration: '1m', target: 5 },
           { duration: '30s', target: 0 },
         ],
-        exec: 'analyzeInventory',
+        exec: 'runSync',
       },
       read_endpoints: { executor: 'constant-vus', vus: 5, duration: '2m', exec: 'readEndpoints' },
     },
@@ -47,10 +46,9 @@ const PROFILES = {
   },
   deployed: {
     request_timeout: '5s',
-    analyze_timeout: '10s',
     scenarios: {
       health_check: { executor: 'constant-vus', vus: 5, duration: '30s', exec: 'healthCheck' },
-      analyze_endpoint: {
+      run_sync: {
         executor: 'ramping-vus',
         startVUs: 0,
         stages: [
@@ -58,7 +56,7 @@ const PROFILES = {
           { duration: '1m', target: 20 },
           { duration: '30s', target: 0 },
         ],
-        exec: 'analyzeInventory',
+        exec: 'runSync',
       },
       read_endpoints: { executor: 'constant-vus', vus: 10, duration: '2m', exec: 'readEndpoints' },
     },
@@ -91,39 +89,32 @@ export function healthCheck() {
   errorRate.add(res.status !== 200);
 }
 
-export function analyzeInventory() {
-  const payload = JSON.stringify({
-    product_id: `LOAD-${Math.floor(Math.random() * 10000)}`,
-    name: `Load Test Product ${Math.floor(Math.random() * 10000)}`,
-    current_stock: Math.floor(Math.random() * 500),
-    daily_sales: Math.round(Math.random() * 20 * 10) / 10,
-    lead_time_days: Math.floor(Math.random() * 30) + 3,
-    unit_cost: Math.round(Math.random() * 100 * 100) / 100,
-    unit_price: Math.round(Math.random() * 200 * 100) / 100,
-    category: 'electronics',
-  });
-
-  const res = http.post(`${BASE_URL}/api/v1/analyze`, payload, {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
+export function runSync() {
+  const res = http.post(
+    `${BASE_URL}/api/v1/run-sync-async`,
+    JSON.stringify({}),
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY,
+      },
+      timeout: profile.request_timeout,
     },
-    timeout: profile.analyze_timeout,
-  });
+  );
   throughput.add(1);
   requestDuration.add(res.timings.duration);
   check(res, {
-    'analyze: status 200': (r) => r.status === 200,
-    'analyze: has recommendation': (r) => {
+    'run-sync: status 202': (r) => r.status === 202,
+    'run-sync: has task_id': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return body.recommended_action !== undefined;
+        return body.task_id !== undefined;
       } catch {
         return false;
       }
     },
   });
-  errorRate.add(res.status !== 200);
+  errorRate.add(res.status !== 202);
 }
 
 export function readEndpoints() {
