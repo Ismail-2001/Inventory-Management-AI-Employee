@@ -279,7 +279,51 @@ forecast caching fall back to in-process storage automatically.
   curl -s "http://localhost:8002/api/v1/audit/logs?limit=20" -H "X-API-Key: <admin-key>"
   ```
 
-## 6. Escalation Contacts
+## 6. Operational Procedures
+
+### 6.1 Backup Drill (Monthly)
+
+```bash
+# Run automated backup + restore drill
+./scripts/ops/backup-drill.sh drill
+
+# Or step by step:
+./scripts/ops/backup-drill.sh backup
+./scripts/ops/backup-drill.sh restore
+```
+
+### 6.2 Load Test Baseline (Quarterly)
+
+```bash
+# Run k6 load test against staging
+./scripts/ops/load-baseline.sh /api/v1/health 10 60s
+
+# Check results
+cat load/results/baseline_*.json | jq '.metrics.http_req_duration'
+```
+
+### 6.3 Staging Environment
+
+```bash
+# Start staging (lower resource limits)
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
+# Staging runs on:
+# - API: http://localhost:8002
+# - Postgres: localhost:5433
+# - Redis: localhost:6380
+```
+
+### 6.4 Quarterly Operational Checklist
+
+- [ ] Backup drill completed successfully
+- [ ] Load test baseline recorded
+- [ ] Prometheus alerts tested (fire test alert)
+- [ ] SSL certificate renewed (if applicable)
+- [ ] Dependencies updated (`pip-audit`, `npm audit`)
+- [ ] Disk space verified (>20% free)
+
+## 7. Escalation Contacts
 
 - P1/P2 (full or degraded availability): page the platform owner.
 - P3 (minor, non-user-visible): open a GitHub issue; fix during business hours.
