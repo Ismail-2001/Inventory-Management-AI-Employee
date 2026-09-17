@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import Any
 
 import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse, Response
