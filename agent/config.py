@@ -88,6 +88,9 @@ class Settings:
     sso_saml_certificate: str = field(default_factory=lambda: os.getenv("SSO_SAML_CERTIFICATE", ""))
     sso_allowed_domains: str = field(default_factory=lambda: os.getenv("SSO_ALLOWED_DOMAINS", ""))
 
+    sentry_dsn: str = field(default_factory=lambda: os.getenv("SENTRY_DSN", ""))
+    sentry_traces_sample_rate: float = field(default_factory=lambda: float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")))
+
     def validate_required(self) -> None:
         missing = []
         if self.environment == "production":
