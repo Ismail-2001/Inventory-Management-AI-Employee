@@ -1,8 +1,7 @@
 global:
   resolve_timeout: 5m
-  # REQUIRED: replace with your Slack incoming webhook URL before enabling Slack
-  # notifications. Keep the value as a no-op placeholder to run without Slack.
-  slack_api_url: "https://SLACK-WEBHOOK-URL-PLACEHOLDER.invalid"
+  # Set SLACK_WEBHOOK_URL in your .env file: https://hooks.slack.com/services/T00/BOT/XXXX
+  slack_api_url: "${SLACK_WEBHOOK_URL:-REPLACE_WITH_YOUR_SLACK_WEBHOOK_URL}"
 
 route:
   group_by: ["alertname", "severity"]
