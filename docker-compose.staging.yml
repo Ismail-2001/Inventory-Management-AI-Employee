@@ -1,0 +1,57 @@
+# Staging Environment - Production-like with lower resource limits
+# Usage: docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
+services:
+  api:
+    environment:
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=INFO
+      - DB_ECHO=false
+      - DEBUG=false
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    environment:
+      - POSTGRES_DB=inventory_agent_staging
+      - POSTGRES_USER=inventory
+      - POSTGRES_PASSWORD=inventory
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    ports:
+      - "5433:5432"
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    ports:
+      - "6380:6379"
+
+  # Staging uses same monitoring as production (internal only)
+  prometheus:
+    environment:
+      - PROMETHEUS_ENV=staging
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+
+  alertmanager:
+    environment:
+      - ALERTMANAGER_ENV=staging
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
