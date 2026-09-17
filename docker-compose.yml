@@ -106,6 +106,8 @@ services:
     image: prom/alertmanager:v0.27.0
     ports:
       - "9093:9093"
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-REPLACE_WITH_YOUR_SLACK_WEBHOOK_URL}
     volumes:
       - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
     command:
