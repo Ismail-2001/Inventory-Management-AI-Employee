@@ -213,14 +213,14 @@ jobs:
         run: cd inventory-frontend && npm run test:e2e
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: inventory-frontend/playwright-report/
           retention-days: 14
       - name: Upload Playwright test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-test-results
           path: inventory-frontend/test-results/
