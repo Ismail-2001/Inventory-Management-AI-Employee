@@ -433,6 +433,7 @@ async def test_auto_promote_flips_passing_shadow_merchant(monkeypatch):
     assert log_mock.call_args.kwargs["details"]["merchant_id"] == 5
     assert _metric_value('forecast_promotion_status{engine="ensemble",merchant="5"}') == 1.0
     assert _metric_value('forecast_mape_ratio{merchant="5"}') == 0.5
+    assert _metric_value('forecast_promotion_gate_pass{merchant="5"}') == 1.0
 
 
 @pytest.mark.asyncio
@@ -452,6 +453,7 @@ async def test_auto_promote_skips_merchant_when_gates_fail(monkeypatch):
     assert session.committed is False
     log_mock.assert_not_awaited()
     assert _metric_value('forecast_promotion_status{engine="shadow",merchant="6"}') == 1.0
+    assert _metric_value('forecast_promotion_gate_pass{merchant="6"}') == 0.0
 
 
 @pytest.mark.asyncio

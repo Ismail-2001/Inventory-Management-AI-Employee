@@ -111,6 +111,7 @@ pip install -r requirements-forecast.txt
 | `forecast_fallback_total` | v2 failures that fell back to v1 — should stay ~0 |
 | `forecast_fallback_count{reason}` | `ensemble_error` / `timeout` / `circuit_breaker` breakdown |
 | `forecast_mape_ratio{merchant}` | Daily promotion-gate snapshot (> 0.85 would not promote) |
+| `forecast_promotion_gate_pass{merchant}` | 1 when all gates pass for a shadow tenant |
 | `forecast_promotion_status{merchant,engine}` | 1 for each tenant's current engine |
 | `forecast_duration_seconds{model}` | Per-run latency (12s node timeout, 10s cache TTL) |
 

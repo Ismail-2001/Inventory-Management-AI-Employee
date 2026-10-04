@@ -539,6 +539,11 @@ async def auto_promote_merchants() -> list[PromotionEvaluation]:
         evaluations.append(evaluation)
         if evaluation.summary.mape_ratio is not None:
             metrics.gauge("forecast_mape_ratio", evaluation.summary.mape_ratio, merchant=str(merchant.id))
+        metrics.gauge(
+            "forecast_promotion_gate_pass",
+            1.0 if evaluation.gates_passed else 0.0,
+            merchant=str(merchant.id),
+        )
         _set_promotion_status_gauges(
             merchant.id,
             ENGINE_ENSEMBLE if evaluation.promoted else merchant.forecast_engine,

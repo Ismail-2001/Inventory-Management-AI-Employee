@@ -95,6 +95,7 @@ counted as `reason="ensemble_error"` / `reason="timeout"`.
 | `forecast_engine_used{engine,merchant}` | Which engine actually served each run |
 | `forecast_fallback_count{reason}` | `ensemble_error` / `timeout` / `circuit_breaker` — should stay ~0 |
 | `forecast_mape_ratio{merchant}` | Daily gate snapshot; > 0.85 = would not promote |
+| `forecast_promotion_gate_pass{merchant}` | 1 when every gate passes for a shadow tenant (would promote today) |
 | `forecast_promotion_status{merchant,engine}` | 1 for the tenant's current engine, 0 otherwise |
 | `forecast_fallback_total` | Legacy alias of the non-breaker reasons (kept for dashboards) |
 
