@@ -8,7 +8,8 @@
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/tests-232%20passing-22c55e?style=flat-square" alt="232 Tests" />
-  <img src="https://img.shields.io/badge/license-proprietary-F05032?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License: MIT" />
+  <a href="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml"><img src="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
 </p>
 
 <div align="center">
@@ -17,13 +18,13 @@
   <p><strong>Stop stockouts. Reduce overstock. Automate purchasing decisions.</strong></p>
   <p>An autonomous pipeline that syncs your Shopify store, forecasts demand, detects risks,<br>drafts purchase orders with AI reasoning, and notifies your team — all in real time.</p>
   <br>
-  <a href="#-quick-start"><strong>Get started in 10 minutes →</strong></a>
+  <a href="#quick-start"><strong>Get started in 10 minutes →</strong></a>
   <br>
-  <a href="#-api-overview">API</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-deployment">Deploy</a> ·
-  <a href="#-roadmap">Roadmap</a>
+  <a href="#api-overview">API</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#deployment">Deploy</a> ·
+  <a href="#roadmap">Roadmap</a>
   <br><br>
 </div>
 
@@ -190,10 +191,10 @@ flowchart LR
 | **Rate Limiting** | slowapi with tier-based limits (developer/business/enterprise) |
 | **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS 4, Recharts, Framer Motion |
 | **Web Server** | Caddy (auto TLS via Let's Encrypt) |
-| **Observability** | OpenTelemetry (gRPC exporter) + Prometheus metrics + correlation IDs |
+| **Observability** | OpenTelemetry + Prometheus metrics + Sentry errors + correlation IDs |
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
-| **CI/CD** | GitHub Actions — lint → test → eval → load test → Docker push |
+| **CI/CD** | GitHub Actions — 8-check PR gate → Trivy scan → GHCR push → staging/prod deploy |
 | **Testing** | 232 tests — backend unit/integration/eval/contracts (162) + frontend Vitest (53) + Playwright E2E (17) |
 
 ---
@@ -323,6 +324,10 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | `inventory-agent` | FastAPI application | 8002 |
 | `postgres` | PostgreSQL 16 database | 5432 |
 | `redis` | Redis 7 cache (256MB, LRU) | 6379 |
+| `prometheus` | Metrics scrape + alert rules | 9090 |
+| `alertmanager` | Alert routing → Slack | 9093 |
+| `postgres-exporter` | Postgres metrics for Prometheus | — |
+| `redis-exporter` | Redis metrics for Prometheus | — |
 | `migrate` | Alembic migration runner (init container) | — |
 
 ---
@@ -390,6 +395,15 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | `TEMPERATURE` | `0.3` | LLM temperature (lower = more deterministic) |
 | `MAX_TOKENS` | `1024` | Max LLM output tokens |
 
+### Monitoring & Alerting
+
+| Variable | Default | Description |
+|---|---|---|
+| `SENTRY_DSN` | — | Sentry error tracking (when set, errors are reported automatically) |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Fraction of transactions traced (0.0–1.0) |
+| `SLACK_WEBHOOK_URL` | — | Slack incoming webhook — receives Alertmanager alerts and pipeline notifications |
+| `DEPLOYMENT_REGION` | `local` | Region label surfaced in `/health` |
+
 ---
 
 ## Deployment
@@ -400,7 +414,21 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 docker compose up -d --build
 ```
 
-### Production
+### Fly.io (free tier)
+
+`fly.toml` ships with the repo — app name `inventory-agent`, region `sin` (Singapore), 512MB shared VM, health check on `/health`.
+
+```bash
+fly auth login
+fly launch                       # picks up fly.toml
+fly secrets set DATABASE_URL="postgresql://..."            # e.g. Neon free tier
+fly secrets set CHECKPOINTER_DATABASE_URL="postgresql://..."  # separate DB
+fly deploy
+```
+
+> **Why two databases?** LangGraph's Postgres checkpointer writes on every node transition — keeping it separate from the primary data store prevents checkpoint churn from starving inventory queries.
+
+### Production (Docker Compose)
 
 ```bash
 # docker-compose.prod.yml layers on top of the base compose file, which
@@ -432,10 +460,30 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec prometheus 
 - [ ] Configure `DOMAIN` for automatic TLS and HSTS
 - [ ] Configure `SLACK_WEBHOOK_URL` in `prometheus/alertmanager.yml` for alert notifications
 - [ ] Verify nightly backup restores successfully (see `docs/RUNBOOK.md` §0.4)
+- [ ] Set `SENTRY_DSN` for error tracking in production
 - [ ] (Optional) Configure SSO via `SSO_OIDC_*` environment variables
 - [ ] (Optional) Set `DATABASE_READ_URL` for read-replica offloading
 - [ ] (Optional) Configure `AUDIT_S3_*` for compliance-grade audit logging
 - [ ] (Optional) Raise `DB_POOL_SIZE`/`DB_POOL_MAX_OVERFLOW` for high-concurrency traffic
+
+**Further reading**: [Deployment guide](docs/DEPLOY.md) · [On-call runbook](docs/RUNBOOK.md) · [Ops dashboard reference](docs/OPS-DASHBOARD.md)
+
+---
+
+## Observability & Alerting
+
+Four layers, each independently useful:
+
+| Layer | What it catches | Where to look |
+|---|---|---|
+| **Structured logs** | Request-level debugging; JSON with correlation IDs | `docker compose logs -f inventory-agent` |
+| **Prometheus + `/metrics`** | Latency, error rate, DB pool, queue depth | `http://localhost:9090` (Prometheus UI) |
+| **Alertmanager → Slack** | Threshold breaches (see `prometheus/rules.yml`) | Slack `#alerts` channel |
+| **Sentry** | Uncaught exceptions with stack traces + context | Sentry dashboard (set `SENTRY_DSN`) |
+
+**Health endpoint**: `GET /health` reports DB, Redis, and SSO status — used by Docker `HEALTHCHECK`, Fly.io checks, and uptime monitors.
+
+**Runbooks**: every alert maps to a numbered procedure in [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §4 (crash loops, 5xx spikes, DB saturation, migration failures, Redis/LLM outages).
 
 ---
 
@@ -507,17 +555,52 @@ BASE_URL=http://localhost:8002 k6 run load/load_test.js
 
 **Thresholds**: ci profile — p95 < 5s, error rate < 5%; deployed profile — p95 < 3s, error rate < 5%
 
-### CI Pipeline
+### CI/CD Pipeline
 
-Every push to `main`:
+**Pull requests** must pass all 8 checks before merge (branch protection on `main`):
 
-1. **Lint**: Ruff (Python code style)
-2. **Backend Tests**: 162 tests with PostgreSQL service container
-3. **Eval**: Forecast accuracy + LLM-as-Judge quality scoring
-4. **Frontend Tests**: 53 Vitest unit tests + production build
-5. **Build**: Docker image (multi-stage)
-6. **Scan**: Trivy container vulnerability scan
-7. **Package**: Push to GitHub Container Registry (`ghcr.io`)
+| Check | What it verifies |
+|---|---|
+| `lint` | Ruff lint + `ruff format --check` |
+| `type-check` | `mypy --strict` across `agent/`, `api/`, `shared/` |
+| `unit-tests` | Backend unit tests (pytest, PostgreSQL service container) |
+| `integration-tests` | Alembic migrations, schema drift check, integration tests |
+| `eval-suite` | Forecast accuracy + LLM-as-Judge quality scoring |
+| `frontend-tests` | 53 Vitest unit tests + production build |
+| `e2e-tests` | 17 Playwright E2E tests against a live stack |
+| `docker-build` | Multi-stage build + Trivy vulnerability scan + push to GHCR |
+
+**Additional workflows**:
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `load-test.yml` | push to `main` | k6 load test with p95/error-rate thresholds |
+| `deploy.yml` | push to `main` | Build → push image → deploy staging → deploy production |
+
+**To run CI locally before pushing** (mirrors the `lint` job):
+
+```bash
+ruff check . --target-version py312
+ruff format --check .
+mypy agent api shared
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `docker compose up` fails on `migrate` | DB not ready yet | `docker compose up -d postgres` then rerun; migrations auto-retry on next start |
+| `collection errors` in pytest | Test env vars missing | Export `ENVIRONMENT=testing`, `DATABASE_URL`, `CHECKPOINTER_DATABASE_URL`, `AGENT_API_KEY=demo-key-2024` |
+| Integration tests skip locally | No local PostgreSQL | Start the compose stack first, or let CI run them |
+| CI `lint` fails but code works | Formatting drift | Run `ruff format .` on touched files before committing |
+| `429` responses during load test | Rate limiting active | Set `RATE_LIMIT_ENABLED=false` (load-test workflow does this) |
+| LLM calls fail / no PO reasoning | No provider key or spend cap hit | Set one of `GROQ_API_KEY`/`OPENAI_API_KEY`/`GOOGLE_API_KEY`; check `DAILY_LLM_SPEND_CAP` |
+| Approval links return 401 | Mismatched `PUBLIC_API_URL` | Must match the public domain the link is opened from |
+| DB pool exhaustion under load | Pool too small | Raise `DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` |
+
+Full incident procedures (crash loops, 5xx spikes, DB saturation, rollback, backup restore) are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ---
 
@@ -654,7 +737,8 @@ inventory-agent/
 ├── shared/                   # Shared utilities
 │   ├── cache.py              # TTL cache (Redis/in-memory)
 │   ├── eval_harness.py       # LLM-as-Judge eval framework
-│   ├── llm_client.py         # Multi-provider LLM client
+│   ├── llm_client.py         # Multi-provider LLM client (circuit breaker, cost tracking)
+│   ├── log_config.py         # Structured JSON logging + correlation IDs
 │   ├── metrics.py            # Prometheus-compatible metrics
 │   ├── redis_cache.py        # Redis cache with fallback
 │   ├── slack.py              # Shared Slack integration
@@ -665,10 +749,20 @@ inventory-agent/
 │   ├── e2e/                  # Playwright E2E tests
 │   └── vitest.config.ts      # Unit test config
 ├── tests/                    # 162 backend test cases
-├── alembic/                  # Database migrations
+├── alembic/                  # Database migrations (14 revisions)
 ├── load/                     # k6 load tests
-├── docker-compose.yml        # Development environment
-├── docker-compose.prod.yml   # Production environment
+├── scripts/
+│   ├── ops/                  # Backup drill + load baseline scripts
+│   ├── backup-db.sh          # Nightly backup
+│   └── restore-db.sh         # Point-in-time restore
+├── prometheus/               # Scrape config, alert rules, Alertmanager → Slack
+├── docs/                     # DEPLOY.md, RUNBOOK.md, OPS-DASHBOARD.md
+├── chaos/                    # Chaos engineering experiments
+├── .github/workflows/        # ci.yml, deploy.yml, load-test.yml
+├── docker-compose.yml        # Development + monitoring stack
+├── docker-compose.prod.yml   # Production layer (Caddy TLS, backups)
+├── docker-compose.staging.yml # Staging overlay (lower resources, alt ports)
+├── fly.toml                  # Fly.io deployment config (free tier)
 └── requirements.txt          # Python dependencies
 ```
 
@@ -690,7 +784,10 @@ inventory-agent/
 | **Frontend Tests** | Complete (53 tests) | Component-level coverage expansion |
 | **E2E Tests** | Complete (Playwright) | Cross-browser testing (Firefox, WebKit) |
 | **Graceful Shutdown** | Complete | Signal handling, inflight drain, connection cleanup |
-| **Monitoring Alerts** | Complete (Prometheus + Alertmanager) | PagerDuty receiver integration |
+| **Monitoring Alerts** | Complete (Prometheus + Alertmanager → Slack) | PagerDuty receiver integration |
+| **Error Tracking** | Complete (Sentry) | Release health + source maps for frontend |
+| **CI/CD Deploy Pipeline** | Complete (GHCR → staging → prod) | Blue/green rollout strategy |
+| **Ops Tooling** | Complete (backup drill, load baseline, staging, runbook) | Automated chaos experiments in CI |
 | **Multi-Warehouse** | — | Location-aware inventory tracking |
 | **Multi-Channel** | — | Amazon SP-API integration |
 
@@ -698,7 +795,7 @@ inventory-agent/
 
 ## License
 
-Proprietary. All rights reserved.
+MIT — see [`LICENSE`](LICENSE).
 
 ---
 
@@ -708,8 +805,8 @@ Proprietary. All rights reserved.
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Get Started</a> ·
-  <a href="#-api-overview">API Docs</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-roadmap">Roadmap</a>
+  <a href="#quick-start">Get Started</a> ·
+  <a href="#api-overview">API Docs</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#roadmap">Roadmap</a>
 </p>
