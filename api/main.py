@@ -357,6 +357,9 @@ app.include_router(sso_router)
 from api.routes.branding import router as branding_router
 
 app.include_router(branding_router)
+from api.routes.forecast_engine import router as forecast_engine_router
+
+app.include_router(forecast_engine_router)
 
 from shared.metrics import setup_metrics
 

@@ -67,6 +67,13 @@ class Merchant(Base):
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
     tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
     branding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
+    # Forecast engine selection: ensemble | exponential | shadow.
+    # New merchants default to ensemble; migration 016 parks existing tenants
+    # on shadow until the safety gates promote them (or an operator does).
+    forecast_engine: Mapped[str] = mapped_column(
+        String(16), default="ensemble", nullable=False, server_default="ensemble"
+    )
+    forecast_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
