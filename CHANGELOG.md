@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Natural-language chat agent: `POST /api/v1/chat` SSE endpoint with LangGraph tool-calling
+  over live data, conversation history endpoints, and human-confirmed write actions
+  (`/api/v1/chat/actions/{id}/confirm|cancel` that always create `pending_approval` POs).
+- `/chat` frontend page with streaming responses, tool chips, and confirm/cancel action cards.
+- `chat_messages` table (migration `017_chat_messages`) plus `CHAT_*` settings
+  (`CHAT_MAX_STEPS`, `CHAT_MAX_INPUT_CHARS`, `CHAT_HISTORY_MESSAGES`, `CHAT_ACTION_TTL_MINUTES`).
+- Tool-calling and streaming support in `shared/llm_client.py` (`call_with_tools`, `call_stream`)
+  for OpenAI- and Gemini-compatible providers.
+- Docs: `docs/CHAT-AGENT.md`.
+
 ## [1.0.0] - 2026-08-10
 
 ### Added

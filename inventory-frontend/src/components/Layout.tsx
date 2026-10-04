@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { LayoutGrid, ClipboardCheck, Boxes, BarChart3, Settings as SettingsIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardCheck, Boxes, BarChart3, MessageSquare, Settings as SettingsIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { onToast } from '../lib/toast'
 
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutGrid },
   { path: '/inventory', label: 'Inventory', icon: Boxes },
   { path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardCheck },
+  { path: '/chat', label: 'Chat', icon: MessageSquare },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: SettingsIcon },
 ]

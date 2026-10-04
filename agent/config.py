@@ -111,6 +111,14 @@ class Settings:
         default_factory=lambda: os.getenv("FORECAST_STOCKOUT_CORRECTION", "true").lower() == "true"
     )
 
+    # Chat agent (natural-language assistant over live inventory data).
+    chat_max_steps: int = field(default_factory=lambda: max(1, int(os.getenv("CHAT_MAX_STEPS", "6"))))
+    chat_max_input_chars: int = field(default_factory=lambda: max(1, int(os.getenv("CHAT_MAX_INPUT_CHARS", "4000"))))
+    chat_history_messages: int = field(default_factory=lambda: max(0, int(os.getenv("CHAT_HISTORY_MESSAGES", "20"))))
+    chat_action_ttl_minutes: int = field(
+        default_factory=lambda: max(1, int(os.getenv("CHAT_ACTION_TTL_MINUTES", "15")))
+    )
+
     def validate_required(self) -> None:
         missing = []
         if self.environment == "production":
