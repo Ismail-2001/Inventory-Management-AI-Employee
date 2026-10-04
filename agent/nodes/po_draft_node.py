@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 
 from agent.config import settings
 from agent.db import async_session_factory
@@ -96,6 +96,7 @@ async def po_draft_node(state: State) -> State:
         unit_cost_by_sku = supplier_row.unit_cost_by_sku if isinstance(supplier_row.unit_cost_by_sku, dict) else {}
 
     cutoff = datetime.now(UTC) - timedelta(hours=1)
+    in_transit_cutoff = datetime.now(UTC) - timedelta(days=14)
     async with async_session_factory() as session:
         sku_ids = [a["sku_id"] for a in alerts]
         existing_pos = (
@@ -114,6 +115,30 @@ async def po_draft_node(state: State) -> State:
             .all()
         )
         existing_sku_ids = set(existing_pos)
+
+        # Open demand already covered by pending POs + recently approved
+        # (in-transit) POs — prevents re-ordering the same units each run.
+        on_order_rows = (
+            await session.execute(
+                select(PurchaseOrder.sku_id, func.coalesce(func.sum(PurchaseOrder.quantity), 0))
+                .where(
+                    PurchaseOrder.sku_id.in_(sku_ids),
+                    or_(
+                        PurchaseOrder.status == POStatus.pending_approval,
+                        and_(
+                            PurchaseOrder.status == POStatus.approved,
+                            PurchaseOrder.approved_at >= in_transit_cutoff,
+                        ),
+                    ),
+                )
+                .group_by(PurchaseOrder.sku_id)
+            )
+        ).all()
+        on_order_map: dict[int, int] = {}
+        for row in on_order_rows:
+            sid, qty = row[0], row[1]
+            if isinstance(sid, int) and not isinstance(sid, bool) and isinstance(qty, int):
+                on_order_map[sid] = qty
 
     pending_batch = []
     for alert in alerts:
@@ -141,6 +166,7 @@ async def po_draft_node(state: State) -> State:
             current_stock=current_stock,
             lead_time_days=lead_time,
             moq=moq,
+            on_order=on_order_map.get(sku_id, 0),
         )
 
         if quantity <= 0:

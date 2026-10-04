@@ -93,6 +93,24 @@ class Settings:
         default_factory=lambda: float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
     )
 
+    # Forecasting (ensemble_v2). Rollout is shadow-first: production serves
+    # exp_smoothing_v1 until backtest numbers are published; dev/CI shadow-compute
+    # both models so accuracy deltas are visible from the first run.
+    forecast_model_version: str = field(
+        default_factory=lambda: os.getenv(
+            "FORECAST_MODEL_VERSION",
+            "exp_smoothing_v1" if os.getenv("ENVIRONMENT", "development") == "production" else "shadow",
+        )
+    )
+    forecast_enable_prophet: bool = field(
+        default_factory=lambda: os.getenv("FORECAST_MODEL_PROPHET", "true").lower() == "true"
+    )
+    forecast_horizon_days: int = field(default_factory=lambda: int(os.getenv("FORECAST_HORIZON_DAYS", "30")))
+    forecast_history_days: int = field(default_factory=lambda: int(os.getenv("FORECAST_HISTORY_DAYS", "180")))
+    forecast_stockout_correction: bool = field(
+        default_factory=lambda: os.getenv("FORECAST_STOCKOUT_CORRECTION", "true").lower() == "true"
+    )
+
     def validate_required(self) -> None:
         missing = []
         if self.environment == "production":

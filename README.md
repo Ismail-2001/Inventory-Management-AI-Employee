@@ -69,7 +69,7 @@ flowchart LR
 | Step | What Happens | Outcome |
 |---|---|---|
 | **1. Sync** | Pulls products, inventory, and 30 days of sales from Shopify via GraphQL | Up-to-date catalog with stock levels and sales history |
-| **2. Forecast** | Applies exponential smoothing per SKU to predict daily demand | `predicted_daily_demand` and `days_of_stock_remaining` per SKU |
+| **2. Forecast** | Ensemble of SES/Holt/seasonal/Croston models with confidence intervals (v1 exponential smoothing as safe fallback) | `predicted_daily_demand`, p10/p90 band, and `days_of_stock_remaining` per SKU |
 | **3. Risk** | Flags SKUs as `critical` or `warning` when stock falls below lead-time threshold | Prioritized alerts for at-risk items |
 | **4. PO Draft** | Calculates MOQ-aware reorder quantities and generates AI-powered purchasing rationale | Draft purchase orders with human-readable reasoning |
 | **5. Notify** | Sends Slack summary with HMAC-signed one-click approve/reject links | Decision in seconds, not days |
@@ -92,10 +92,13 @@ flowchart LR
 
 ### Demand Forecasting
 
-- **Exponential smoothing** on per-SKU sales history (configurable window, default 30 days)
-- Per-SKU predictions with days-of-stock-remaining calculations
-- **Redis-backed TTL cache** (10-min) with in-memory fallback for pipeline efficiency
-- **Parallel execution** with per-SKU 10s timeout — slow items never block the batch
+- **Model ensemble** (v2): SES, Holt, weekly-seasonal Holt, and Croston for intermittent demand — best model selected per SKU by hold-out wMAPE, with blending when candidates tie
+- **Shadow-first rollout**: dev/CI compute both models and persist both rows; production serves legacy v1 until backtest numbers justify the flip (`FORECAST_MODEL_VERSION`)
+- **Confidence intervals**: MAD-based p10/p90 demand band and days-of-cover at both ends for safety-stock decisions
+- **Stockout correction**: censored (out-of-stock) zero days are imputed instead of dragging demand to zero
+- **Optional Prophet**: install `requirements-forecast.txt` to add it as an ensemble candidate — timeouts + circuit breaker keep the pipeline safe, tier-0 fallback when unavailable
+- **Redis-backed TTL cache** (10-min) with in-memory fallback, parallel execution with per-SKU timeout
+- Backtest CLI + docs: [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md)
 
 ### Stockout Risk Detection
 
@@ -395,6 +398,18 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | `TEMPERATURE` | `0.3` | LLM temperature (lower = more deterministic) |
 | `MAX_TOKENS` | `1024` | Max LLM output tokens |
 
+### Forecasting
+
+| Variable | Default | Description |
+|---|---|---|
+| `FORECAST_MODEL_VERSION` | `shadow` (prod: `exp_smoothing_v1`) | Served model: `exp_smoothing_v1`, `shadow` (compute both, serve v1), or `ensemble_v2` |
+| `FORECAST_MODEL_PROPHET` | `true` | Use Prophet as an ensemble candidate when installed |
+| `FORECAST_HORIZON_DAYS` | `30` | Forecast horizon |
+| `FORECAST_HISTORY_DAYS` | `180` | Per-SKU history window |
+| `FORECAST_STOCKOUT_CORRECTION` | `true` | Impute censored (stockout) zero-sales days |
+
+See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md) and [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md).
+
 ### Monitoring & Alerting
 
 | Variable | Default | Description |
@@ -662,7 +677,8 @@ Run `python seed_demo_data.py` after migrations to populate the database.
 | `skus` | Product catalog | variant_id, sku_code, current_stock, location_id |
 | `merchants` | Tenant accounts | hashed_api_key, key_prefix, shopify_domain, tier, branding (JSONB) |
 | `sales_history` | Daily unit sales per SKU | sku_id, date, units_sold |
-| `forecasts` | Demand predictions | sku_id, predicted_daily_demand, days_of_stock_remaining |
+| `forecasts` | Demand predictions | sku_id, predicted_daily_demand, p10/p90 band, model_version, backtest_wmape |
+| `inventory_snapshots` | Daily stock ledger | sku_id, on_hand, date (unique per day) |
 | `risk_alerts` | Stockout warnings | sku_id, risk_level (critical/warning), reason |
 | `suppliers` | Supplier profiles | default_lead_time, default_moq, moq_by_sku (JSONB) |
 | `purchase_orders` | Draft and finalized POs | sku_id, status, quantity, unit_cost, reasoning_text, thread_id |
@@ -699,7 +715,8 @@ inventory-agent/
 │   ├── audit_export.py       # S3 export (SigV4)
 │   ├── config.py             # Environment-based settings
 │   ├── db.py                 # Async SQLAlchemy engine + pool
-│   ├── forecast.py           # Exponential smoothing
+│   ├── forecast.py           # Ensemble forecasting engine (v1 fallback + v2 candidates)
+│   ├── forecast_prophet.py   # Optional Prophet adapter (circuit breaker, timeouts)
 │   ├── graph.py              # LangGraph pipeline definition
 │   ├── inventory_agent.py    # LLM agent + risk analysis
 │   ├── llm_usage.py          # Cost tracking + circuit breaker
@@ -748,15 +765,16 @@ inventory-agent/
 │   ├── src/                  # Components, pages, utilities
 │   ├── e2e/                  # Playwright E2E tests
 │   └── vitest.config.ts      # Unit test config
-├── tests/                    # 162 backend test cases
-├── alembic/                  # Database migrations (14 revisions)
+├── tests/                    # 218 backend test cases
+├── alembic/                  # Database migrations (15 revisions)
 ├── load/                     # k6 load tests
 ├── scripts/
 │   ├── ops/                  # Backup drill + load baseline scripts
 │   ├── backup-db.sh          # Nightly backup
-│   └── restore-db.sh         # Point-in-time restore
+│   ├── restore-db.sh         # Point-in-time restore
+│   └── forecast_backtest.py  # v1 vs ensemble_v2 accuracy backtest
 ├── prometheus/               # Scrape config, alert rules, Alertmanager → Slack
-├── docs/                     # DEPLOY.md, RUNBOOK.md, OPS-DASHBOARD.md
+├── docs/                     # DEPLOY, RUNBOOK, OPS-DASHBOARD, FORECAST-TUNING, FORECAST-ACCURACY
 ├── chaos/                    # Chaos engineering experiments
 ├── .github/workflows/        # ci.yml, deploy.yml, load-test.yml
 ├── docker-compose.yml        # Development + monitoring stack

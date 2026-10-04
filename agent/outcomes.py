@@ -3,7 +3,13 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 
 from agent.db import async_session_factory
-from agent.models import POOutcome, PurchaseOrder, SalesHistory, Sku
+from agent.models import POOutcome, PurchaseOrder, SalesHistory, Sku, Supplier
+
+
+def _lead_time(raw: object) -> int:
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        return 7
+    return raw
 
 
 async def evaluate_pending_outcomes() -> int:
@@ -19,6 +25,12 @@ async def evaluate_pending_outcomes() -> int:
             )
         )
         pos = result.scalars().all()
+        supplier_lt = (
+            (await session.execute(select(Supplier.default_lead_time_days).order_by(Supplier.id).limit(1)))
+            .scalars()
+            .one_or_none()
+        )
+        lead_time_default = _lead_time(supplier_lt)
 
     for po in pos:
         async with async_session_factory() as session:
@@ -30,7 +42,7 @@ async def evaluate_pending_outcomes() -> int:
             if not sku:
                 continue
 
-            lead_time_days = getattr(sku, "lead_time_days", None) or 7
+            lead_time_days = lead_time_default
             approved_at = po.approved_at
             if approved_at is None:
                 continue

@@ -1,0 +1,6 @@
+# Optional forecasting extras — install with:
+#   pip install -r requirements-forecast.txt
+#
+# Prophet is used as an additional ensemble candidate when available.
+# Without it, ensemble_v2 runs tier-0 models only (SES/Holt/seasonal/Croston).
+prophet>=1.1.5

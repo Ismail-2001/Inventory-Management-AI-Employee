@@ -96,10 +96,37 @@ class Forecast(Base):
     predicted_daily_demand: Mapped[float] = mapped_column(Float, nullable=False)
     days_of_stock_remaining: Mapped[float | None] = mapped_column(Float)
     model_version: Mapped[str] = mapped_column(String(32), default="exp_smoothing_v1")
+    # ensemble_v2 additions (nullable — v1 rows leave these unset)
+    p10_daily_demand: Mapped[float | None] = mapped_column(Float)
+    p90_daily_demand: Mapped[float | None] = mapped_column(Float)
+    days_of_cover_p10: Mapped[float | None] = mapped_column(Float)
+    days_of_cover_p90: Mapped[float | None] = mapped_column(Float)
+    backtest_wmape: Mapped[float | None] = mapped_column(Float)
+    backtest_bias: Mapped[float | None] = mapped_column(Float)
+    horizon_days: Mapped[int | None] = mapped_column(Integer, default=30)
+    model_meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     sku: Mapped["Sku"] = relationship(back_populates="forecasts")
 
     __table_args__ = (Index("ix_forecast_sku_created", "sku_id", "created_at"),)
+
+
+class InventorySnapshot(Base):
+    """End-of-day (or latest known) stock level per SKU.
+
+    Accrues from pipeline runs so future forecast evaluation can distinguish
+    true zero-sales days from censored (stockout) days.
+    """
+
+    __tablename__ = "inventory_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sku_id: Mapped[int] = mapped_column(Integer, ForeignKey("skus.id", ondelete="CASCADE"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    stock_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), default="sync")
+
+    __table_args__ = (UniqueConstraint("sku_id", "date", name="uq_inventory_snapshot_sku_date"),)
 
 
 class RiskAlert(Base):
