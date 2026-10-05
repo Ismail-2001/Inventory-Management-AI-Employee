@@ -119,6 +119,14 @@ class Settings:
         default_factory=lambda: max(1, int(os.getenv("CHAT_ACTION_TTL_MINUTES", "15")))
     )
 
+    # ROI dashboard assumptions (see docs/ROI-DASHBOARD.md).
+    roi_revenue_multiplier: float = field(
+        default_factory=lambda: max(0.0, float(os.getenv("ROI_REVENUE_MULTIPLIER", "2.0")))
+    )
+    roi_manual_po_minutes: float = field(
+        default_factory=lambda: max(0.0, float(os.getenv("ROI_MANUAL_PO_MINUTES", "12")))
+    )
+
     def validate_required(self) -> None:
         missing = []
         if self.environment == "production":

@@ -361,6 +361,10 @@ from api.routes.chat import router as chat_router
 
 app.include_router(chat_router)
 
+from api.routes.roi import router as roi_router
+
+app.include_router(roi_router)
+
 from shared.metrics import setup_metrics
 
 setup_metrics(app)

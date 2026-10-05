@@ -106,6 +106,10 @@ def _bundle_result(
 
 
 def _row(result: ForecastResult) -> Forecast:
+    meta = dict(result.model_meta or {})
+    if result.fallback_used:
+        # Persisted so the ROI dashboard can compute the engine fallback rate.
+        meta["fallback_used"] = True
     return Forecast(
         sku_id=result.sku_id,
         predicted_daily_demand=result.predicted_daily_demand,
@@ -118,7 +122,7 @@ def _row(result: ForecastResult) -> Forecast:
         backtest_wmape=result.backtest_wmape,
         backtest_bias=result.backtest_bias,
         horizon_days=result.horizon_days,
-        model_meta=result.model_meta or None,
+        model_meta=meta or None,
     )
 
 

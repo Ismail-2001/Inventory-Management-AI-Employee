@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool-calling and streaming support in `shared/llm_client.py` (`call_with_tools`, `call_stream`)
   for OpenAI- and Gemini-compatible providers.
 - Docs: `docs/CHAT-AGENT.md`.
+- ROI & performance dashboard: `GET /api/v1/roi` aggregation endpoint (`agent/roi.py`) with
+  date-range filters (`days=1-365` or inclusive `start`/`end`), covering value generated,
+  LLM cost, ROI multiple, hours saved, stockouts avoided, excess avoided, PO acceptance +
+  time-to-decision, ensemble-vs-baseline forecast accuracy, at-risk SKUs, forecast coverage /
+  confidence distribution, and engine fallback rate. Settings `ROI_REVENUE_MULTIPLIER`
+  (default 2.0) and `ROI_MANUAL_PO_MINUTES` (default 12) make the assumptions explicit.
+- Dashboard rebuild: the default landing page is now the ROI dashboard with 7d/30d/90d/custom
+  range filters, per-metric methodology popovers (`MetricHelp`), accuracy trend chart, and an
+  on-page "How we calculate these numbers" panel. Methodology doc: `docs/ROI-DASHBOARD.md`.
 
 ## [1.0.0] - 2026-08-10
 
