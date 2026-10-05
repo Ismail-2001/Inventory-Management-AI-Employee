@@ -654,7 +654,7 @@ async def test_circuit_breaker_counts_timeouts(monkeypatch):
 def test_initial_state_resolves_default_engine():
     merchant = SimpleNamespace(id=1)  # no forecast_engine attr (legacy fixtures)
     state = run_sync_module._initial_state(merchant, "thread-1")
-    assert state == {"merchant_id": 1, "thread_id": "thread-1", "forecast_engine": "ensemble"}
+    assert state == {"merchant_id": 1, "thread_id": "thread-1", "forecast_engine": "shadow"}
 
 
 def test_initial_state_prefers_merchant_flag():
@@ -684,7 +684,7 @@ async def test_get_engine_reports_stored_and_active(monkeypatch):
     assert payload["stored_engine"] == "shadow"
     assert payload["active_engine"] == "shadow"
     assert payload["source"] == "merchant"
-    assert payload["default_engine"] == "ensemble"
+    assert payload["default_engine"] == "shadow"
     assert payload["valid_engines"] == [ENGINE_ENSEMBLE, ENGINE_EXPONENTIAL, ENGINE_SHADOW]
     assert "evaluation" not in payload
 
@@ -799,10 +799,10 @@ async def test_post_engine_demote_clears_promoted_at(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_merchant_forecast_engine_column_defaults_to_ensemble():
+def test_merchant_forecast_engine_column_defaults_to_shadow():
     column = Merchant.__table__.c.forecast_engine
     assert column.default is not None
-    assert column.default.arg == "ensemble"
+    assert column.default.arg == "shadow"
     assert column.server_default is not None
-    assert column.server_default.arg == "ensemble"
+    assert column.server_default.arg == "shadow"
     assert column.nullable is False

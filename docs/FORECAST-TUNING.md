@@ -28,12 +28,12 @@ run start:
 
 ```
 FORECAST_ENGINE_OVERRIDE  >  merchants.forecast_engine  >  FORECAST_ENGINE_DEFAULT  >  shadow
-   (kill switch)              (per-merchant flag)           (default: ensemble)
+   (kill switch)              (per-merchant flag)           (default: shadow)
 ```
 
 | Variable | Default | Description |
 |---|---|---|
-| `FORECAST_ENGINE_DEFAULT` | `ensemble` | Engine for merchants without a stored flag |
+| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for merchants without a stored flag |
 | `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run (`exponential` = demote everyone) |
 | `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort: `merchant_id % 100 < percent` |
 | `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |
@@ -117,9 +117,9 @@ pip install -r requirements-forecast.txt
 
 ## Rollout procedure (merchant-level, shadow-first)
 
-1. **New merchants** default to `ensemble` (column default). **Existing
-   tenants** start on `shadow` (migration `016`) — both engines persist
-   every run, exponential is served.
+1. **All merchants** start on `shadow` (column default + migration `016`) —
+   both engines persist every run, exponential is served, and the safety
+   gates decide promotion.
 2. Run the backtest against real history: `py -3.12 scripts/forecast_backtest.py`
    (see [FORECAST-ACCURACY.md](FORECAST-ACCURACY.md)).
 3. The daily `daily_forecast_promotions` job promotes each shadow tenant

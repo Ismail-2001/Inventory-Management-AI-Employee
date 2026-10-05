@@ -24,15 +24,13 @@ def upgrade() -> None:
             "forecast_engine",
             sa.String(length=16),
             nullable=False,
-            server_default="ensemble",
+            server_default="shadow",
         ),
     )
     op.add_column(
         "merchants",
         sa.Column("forecast_promoted_at", sa.DateTime(timezone=True), nullable=True),
     )
-    # Existing tenants start in shadow mode: both engines run and persist,
-    # exponential is served, and the safety gates decide promotion.
     op.execute("UPDATE merchants SET forecast_engine = 'shadow'")
 
 

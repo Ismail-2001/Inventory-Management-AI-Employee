@@ -22,7 +22,7 @@ Every run resolves its engine **once** at run start (`_initial_state` in
 ```
 FORECAST_ENGINE_OVERRIDE   (global kill switch — beats everything)
   > merchants.forecast_engine   (per-merchant flag: admin API or promotion job)
-    > FORECAST_ENGINE_DEFAULT   (default: ensemble)
+    > FORECAST_ENGINE_DEFAULT   (default: shadow)
       > shadow                  (only if everything above is invalid)
 ```
 

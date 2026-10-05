@@ -119,7 +119,7 @@ class Settings:
         default_factory=lambda: os.getenv("FORECAST_ENGINE_OVERRIDE", "").strip().lower()
     )
     forecast_engine_default: str = field(
-        default_factory=lambda: os.getenv("FORECAST_ENGINE_DEFAULT", "ensemble").strip().lower()
+        default_factory=lambda: os.getenv("FORECAST_ENGINE_DEFAULT", "shadow").strip().lower()
     )
     # Auto-promotion cohort: only merchants with id % 100 < percent are flipped
     # shadow -> ensemble by the daily promotion job (100 = everyone).
