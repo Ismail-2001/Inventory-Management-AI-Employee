@@ -108,3 +108,32 @@ groups:
         annotations:
           summary: "Redis exporter unreachable"
           description: "Redis monitoring has been down for more than 2 minutes."
+
+  - name: inventory-agent-forecast
+    rules:
+      - alert: ForecastCircuitBreakerTripped
+        expr: increase(forecast_fallback_count{reason="circuit_breaker"}[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Forecast circuit breaker tripped"
+          description: "An ensemble forecast run failed for more than 5% of its SKUs and reran on the exponential engine. Investigate ensemble errors/timeouts before re-enabling."
+
+      - alert: EnsembleFallbackStorm
+        expr: increase(forecast_fallback_count{reason="ensemble_error"}[1h]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High ensemble fallback rate"
+          description: "More than 100 SKU forecast computations fell back to exponential smoothing in the last hour."
+
+      - alert: ForecastMapeRegression
+        expr: forecast_mape_ratio > 0.85
+        for: 24h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ensemble MAPE close to exponential baseline"
+          description: "A merchant's ensemble hold-out MAPE ratio is above the promotion gate (0.85). The daily promotion job will not promote while this holds; demote if it was already promoted."

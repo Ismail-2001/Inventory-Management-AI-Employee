@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool-calling and streaming support in `shared/llm_client.py` (`call_with_tools`, `call_stream`)
   for OpenAI- and Gemini-compatible providers.
 - Docs: `docs/CHAT-AGENT.md`.
+- Per-merchant forecast engine promotion (`ensemble | exponential | shadow`) with a
+  14-day holdout safety-gate evaluation, daily auto-promotion job, admin API
+  (`/api/v1/forecast-engine`), Prometheus metrics and alerts, and
+  `docs/FORECAST-ENGINE-RUNBOOK.md`.
+- Rolling-origin backtest with velocity-tier breakdown
+  (`scripts/forecast_backtest.py --folds`) and the promotion decision memo
+  (`docs/FORECAST-PROMOTION-MEMO.md`).
+
+### Changed
+- Risk and PO Draft nodes consume forecast confidence bands: risk escalates on
+  p90 days-of-cover, PO quantities plan against p90 demand (point forecast is
+  kept when bands are absent or lower).
+- Forecast engine defaults are measure-first: all tenants start on `shadow`
+  (migration `016` + column default) and `FORECAST_ENGINE_DEFAULT` defaults to
+  `shadow`; only the per-tenant promotion gates flip a tenant to `ensemble`.
 
 ## [1.0.0] - 2026-08-10
 

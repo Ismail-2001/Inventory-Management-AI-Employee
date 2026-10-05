@@ -1,7 +1,7 @@
 """Chat conversation history.
 
 Revision ID: 017
-Revises: 015
+Revises: 016
 Create Date: 2026-10-04
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from alembic import op
 
 revision: str = "017"
-down_revision: str | None = "015"
+down_revision: str | None = "016"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

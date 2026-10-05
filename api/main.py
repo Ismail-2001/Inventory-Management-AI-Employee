@@ -360,6 +360,9 @@ app.include_router(branding_router)
 from api.routes.chat import router as chat_router
 
 app.include_router(chat_router)
+from api.routes.forecast_engine import router as forecast_engine_router
+
+app.include_router(forecast_engine_router)
 
 from shared.metrics import setup_metrics
 
