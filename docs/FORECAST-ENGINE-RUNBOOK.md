@@ -9,7 +9,7 @@ auto-promotion gates, the circuit breaker, and what to watch.
 |---|---|---|---|
 | `ensemble` | `ensemble_v2` rows | ensemble row | Primary — accuracy-proven per merchant |
 | `exponential` | `exp_smoothing_v1` rows | v1 row | Kill switch / demotion / breaker fallback |
-| `shadow` | `exp_smoothing_v1` rows | **both** rows | A/B measurement before promotion |
+| `shadow` | `exp_smoothing_v1` rows | **both** rows | A/B measurement mode (demoted or manually parked tenants) |
 
 Legacy DB/env values are canonicalized: `exp_smoothing_v1 → exponential`,
 `ensemble_v2 → ensemble`. Unknown values are ignored (never forced).
@@ -22,7 +22,7 @@ Every run resolves its engine **once** at run start (`_initial_state` in
 ```
 FORECAST_ENGINE_OVERRIDE   (global kill switch — beats everything)
   > merchants.forecast_engine   (per-merchant flag: admin API or promotion job)
-    > FORECAST_ENGINE_DEFAULT   (default: shadow)
+    > FORECAST_ENGINE_DEFAULT   (default: ensemble)
       > shadow                  (only if everything above is invalid)
 ```
 

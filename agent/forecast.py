@@ -17,6 +17,19 @@ Selection: fit every candidate on the train split, score on the hold-out
 window with wMAPE, take the winner (blend with runner-up when within 10%
 relative), refit on the full series, then derive p10/p90 from robust
 hold-out residual spread.
+
+Trend gate: holt and seasonal_holt extrapolate level + trend, which is
+only trustworthy when the series carries enough daily volume to make the
+trend signal survive the noise (>= TREND_MIN_DAILY units per calendar
+day). Below that, selection is restricted to flat models (ses, mean,
+croston) — the promotion backtest showed trend winners chosen on short,
+noisy medium-velocity series regressing badly (see
+docs/FORECAST-PROMOTION-MEMO.md).
+
+Stockout-imputation gate: censored-demand imputation (treating a bracketed
+zero day as a probable stockout) only runs at >= TREND_MIN_DAILY units/day.
+Low-volume series have predominantly structural zero-demand days, so
+imputing them systematically over-forecasts (same memo, criterion 4).
 """
 
 from __future__ import annotations
@@ -31,6 +44,7 @@ from typing import Any
 MAX_SERIES_DAYS = 730
 WEEKLY_STRENGTH_THRESHOLD = 0.30
 BLEND_RELATIVE_TOLERANCE = 0.10
+TREND_MIN_DAILY = 10.0  # units/day — below this, trend models are excluded
 ALPHA_GRID: tuple[float, ...] = (0.1, 0.2, 0.3, 0.5)
 HOLT_ALPHA_GRID: tuple[float, ...] = (0.2, 0.3, 0.5)
 HOLT_BETA_GRID: tuple[float, ...] = (0.05, 0.1, 0.2)
@@ -479,7 +493,8 @@ def build_ensemble(
 
     work = list(values)
     imputed = 0
-    if stockout_correction:
+    velocity = statistics.fmean(values)  # observed calendar-day mean (pre-impute)
+    if stockout_correction and velocity >= TREND_MIN_DAILY:
         work, imputed = impute_censored_days(work)
     if all(v == 0 for v in work):
         bundle = _empty_bundle(horizon, "all_zero")
@@ -501,6 +516,8 @@ def build_ensemble(
     candidate_names: list[str] = ["ses", "holt", "mean", "croston"]
     if diag.weekly_seasonality:
         candidate_names.insert(2, "seasonal_holt")
+    if velocity < TREND_MIN_DAILY:
+        candidate_names = [name for name in candidate_names if name not in ("holt", "seasonal_holt")]
 
     scores: list[ModelScore] = []
     if h > 0:
@@ -537,6 +554,7 @@ def build_ensemble(
                 "weekly_seasonality": diag.weekly_seasonality,
                 "imputed_days": imputed,
                 "blended": False,
+                "velocity_daily": round(velocity, 3),
             },
         )
 
@@ -588,6 +606,7 @@ def build_ensemble(
             "imputed_days": imputed,
             "blended": blended,
             "selected": used.name,
+            "velocity_daily": round(velocity, 3),
         },
     )
 

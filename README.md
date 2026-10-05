@@ -95,7 +95,7 @@ flowchart LR
 ### Demand Forecasting
 
 - **Model ensemble** (v2): SES, Holt, weekly-seasonal Holt, and Croston for intermittent demand — best model selected per SKU by hold-out wMAPE, with blending when candidates tie
-- **Merchant-level engine promotion**: every run resolves its engine per tenant (`FORECAST_ENGINE_OVERRIDE` kill switch → `merchants.forecast_engine` → `FORECAST_ENGINE_DEFAULT`); existing tenants park on shadow and auto-promote to the ensemble only after 14 shadow days + accuracy/bias/coverage gates pass
+- **Merchant-level engine promotion**: every run resolves its engine per tenant (`FORECAST_ENGINE_OVERRIDE` kill switch → `merchants.forecast_engine` → `FORECAST_ENGINE_DEFAULT`); `ensemble` is the default engine and tenants parked on `shadow` (measurement mode) auto-promote only after 14 shadow days + accuracy/bias/coverage gates pass
 - **Run-level circuit breaker**: if more than 5% of a run's SKUs fail ensemble compute, the run reruns on exponential smoothing and alerts (`FORECAST_CIRCUIT_BREAKER_THRESHOLD`)
 - **Shadow-first measurement**: both engines persist rows in shadow mode — the weekly engine report compares them per tenant
 - **Confidence intervals**: MAD-based p10/p90 demand band and days-of-cover at both ends for safety-stock decisions
@@ -444,7 +444,7 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | Variable | Default | Description |
 |---|---|---|
 | `FORECAST_MODEL_VERSION` | `shadow` (prod: `exp_smoothing_v1`) | Served model: `exp_smoothing_v1`, `shadow` (compute both, serve v1), or `ensemble_v2` |
-| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for tenants without a stored per-merchant flag |
+| `FORECAST_ENGINE_DEFAULT` | `ensemble` | Engine for tenants without a stored per-merchant flag |
 | `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run's engine (`exponential` = demote everyone) |
 | `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort share (`merchant_id % 100 < percent`) |
 | `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |

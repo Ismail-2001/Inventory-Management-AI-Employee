@@ -68,7 +68,9 @@ class Merchant(Base):
     tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
     branding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
     # Forecast engine selection: ensemble | exponential | shadow.
-    forecast_engine: Mapped[str] = mapped_column(String(16), default="shadow", nullable=False, server_default="shadow")
+    forecast_engine: Mapped[str] = mapped_column(
+        String(16), default="ensemble", nullable=False, server_default="ensemble"
+    )
     forecast_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
