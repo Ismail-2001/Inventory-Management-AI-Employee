@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 7+" />
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/tests-408%20passing-22c55e?style=flat-square" alt="408 Tests" />
+  <img src="https://img.shields.io/badge/tests-425%20passing-22c55e?style=flat-square" alt="425 Tests" />
   <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License: MIT" />
   <a href="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml"><img src="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
 </p>
@@ -220,7 +220,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — 8-check PR gate → Trivy scan → GHCR push → staging/prod deploy |
-| **Testing** | 408 tests — backend unit/integration/eval/contracts (326) + frontend Vitest (64) + Playwright E2E (18) |
+| **Testing** | 425 tests — backend unit/integration/eval (343) + frontend Vitest (64) + Playwright E2E (18) |
 
 ---
 
@@ -593,7 +593,7 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Backend — full test suite (326 unit tests, no Postgres required)
+# Backend — full test suite (333 unit tests, no Postgres required)
 pytest tests/ -v --ignore=tests/test_integration.py --ignore=tests/eval_suite.py
 
 # Backend — unit tests only (no external dependencies)
@@ -601,6 +601,9 @@ pytest tests/ -v --ignore=tests/test_integration.py
 
 # Backend — integration tests (requires PostgreSQL)
 pytest tests/test_integration.py -v
+
+# Backend — backtest forecast accuracy gate (MAPE threshold, CI eval-suite job)
+pytest tests/eval_suite.py -v
 
 # Backend — LLM eval suite (forecast accuracy, risk classification, ordering logic)
 pytest tests/test_llm_eval.py -v
@@ -611,7 +614,7 @@ pytest tests/test_webhook_contracts.py -v
 # Backend — enterprise feature tests (SSO, audit, branding)
 pytest tests/test_enterprise.py -v
 
-# Frontend — unit tests (58 tests, Vitest + React Testing Library)
+# Frontend — unit tests (64 tests, Vitest + React Testing Library)
 cd inventory-frontend
 npm test
 
@@ -637,7 +640,7 @@ BASE_URL=http://localhost:8002 k6 run load/load_test.js
 
 ### CI/CD Pipeline
 
-**Pull requests** must pass all 8 checks before merge (branch protection on `main`):
+**Pull requests** must pass the required checks before merge (branch protection on `main`):
 
 | Check | What it verifies |
 |---|---|
@@ -645,17 +648,17 @@ BASE_URL=http://localhost:8002 k6 run load/load_test.js
 | `type-check` | `mypy --strict` across `agent/`, `api/`, `shared/` |
 | `unit-tests` | Backend unit tests (pytest, PostgreSQL service container) |
 | `integration-tests` | Alembic migrations, schema drift check, integration tests |
-| `eval-suite` | Forecast accuracy + LLM-as-Judge quality scoring |
-| `frontend-tests` | 53 Vitest unit tests + production build |
-| `e2e-tests` | 17 Playwright E2E tests against a live stack |
-| `docker-build` | Multi-stage build + Trivy vulnerability scan + push to GHCR |
+| `eval-suite` | Backtest forecast accuracy gate (MAPE threshold) |
+| `frontend-tests` | 64 Vitest unit tests + production build |
+| `e2e-tests` | 18 Playwright E2E tests against a live stack |
+| `docker-build` | Multi-stage build + Trivy vulnerability scan + push to GHCR (push to `main` only — reports *skipped* on PRs) |
 
 **Additional workflows**:
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `load-test.yml` | push to `main` | k6 load test with p95/error-rate thresholds |
-| `deploy.yml` | push to `main` | Build → push image → deploy staging → deploy production |
+| `load-test.yml` | manual dispatch, or PR labeled `load-test` | k6 load test with p95/error-rate thresholds |
+| `deploy.yml` | push to `main` → staging; tag `v*` → production | Build → push image → deploy staging / production |
 
 **To run CI locally before pushing** (mirrors the `lint` job):
 
@@ -864,13 +867,16 @@ inventory-agent/
 | **Load Testing** | Complete (k6) | Distributed load testing (k6-operator on k8s) |
 | **Per-Merchant Rate Limiting** | Complete | Redis-backed tier-based enforcement |
 | **Database Indexes** | Complete | 8 composite indexes for hot query paths |
-| **Frontend Tests** | Complete (53 tests) | Component-level coverage expansion |
+| **Frontend Tests** | Complete (64 tests) | Component-level coverage expansion |
 | **E2E Tests** | Complete (Playwright) | Cross-browser testing (Firefox, WebKit) |
 | **Graceful Shutdown** | Complete | Signal handling, inflight drain, connection cleanup |
 | **Monitoring Alerts** | Complete (Prometheus + Alertmanager → Slack) | PagerDuty receiver integration |
 | **Error Tracking** | Complete (Sentry) | Release health + source maps for frontend |
 | **CI/CD Deploy Pipeline** | Complete (GHCR → staging → prod) | Blue/green rollout strategy |
 | **Ops Tooling** | Complete (backup drill, load baseline, staging, runbook) | Automated chaos experiments in CI |
+| **Forecast Engine Promotion** | Complete (safety gates + `ensemble` default) | Real-data intermittent-tier validation (#51) |
+| **ROI & Performance Dashboard** | Complete | Attribution of forecast quality to PO outcomes |
+| **Chat Agent** | Complete (LangGraph tool-calling) | Multi-turn planning workflows with approvals |
 | **Multi-Warehouse** | — | Location-aware inventory tracking |
 | **Multi-Channel** | — | Amazon SP-API integration |
 
