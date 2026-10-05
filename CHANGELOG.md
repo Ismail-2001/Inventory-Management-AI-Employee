@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling-origin backtest with velocity-tier breakdown
   (`scripts/forecast_backtest.py --folds`) and the promotion decision memo
   (`docs/FORECAST-PROMOTION-MEMO.md`).
+- Post-flip observation window (6–20 Oct 2026): protocol, signal table,
+  pre-registered decision rules and Day-1 baseline log
+  (`docs/POST-FLIP-OBSERVATION.md`), linked from the promotion memo and
+  issue #51.
 
 ### Changed
 - Risk and PO Draft nodes consume forecast confidence bands: risk escalates on
