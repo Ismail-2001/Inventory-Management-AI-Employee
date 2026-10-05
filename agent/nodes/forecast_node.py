@@ -11,6 +11,7 @@ from sqlalchemy import select
 from agent.config import settings
 from agent.db import async_session_factory
 from agent.forecast import ForecastBundle, build_ensemble, legacy_predict_daily
+from agent.forecast_engine import ENGINE_ENSEMBLE, ENGINE_EXPONENTIAL, ENGINE_SHADOW, canonical_engine
 from agent.models import Forecast, SalesHistory
 from agent.state import State
 from agent.telemetry import trace_node
@@ -106,6 +107,10 @@ def _bundle_result(
 
 
 def _row(result: ForecastResult) -> Forecast:
+    meta = dict(result.model_meta or {})
+    if result.fallback_used:
+        # Persisted so the ROI dashboard can compute the engine fallback rate.
+        meta["fallback_used"] = True
     return Forecast(
         sku_id=result.sku_id,
         predicted_daily_demand=result.predicted_daily_demand,
@@ -118,7 +123,7 @@ def _row(result: ForecastResult) -> Forecast:
         backtest_wmape=result.backtest_wmape,
         backtest_bias=result.backtest_bias,
         horizon_days=result.horizon_days,
-        model_meta=result.model_meta or None,
+        model_meta=meta or None,
     )
 
 
@@ -135,27 +140,35 @@ def _v1_result(sku_id: int, current_stock: int, values: list[float], fallback: b
     )
 
 
-async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: int) -> ForecastResult:
-    """Compute the point forecast for one SKU according to the active mode.
+async def calculate_forecast(
+    sku_id: int,
+    current_stock: int,
+    lead_time_days: int,
+    engine: str | None = None,
+) -> ForecastResult:
+    """Compute the point forecast for one SKU for the requested engine.
 
-    Modes:
-        exp_smoothing_v1  legacy path only (production default)
-        shadow            compute + persist both, serve v1
-        ensemble_v2       serve ensemble; any failure falls back to v1
+    Engines (canonical, see agent/forecast_engine):
+        exponential  legacy path only
+        shadow       compute + persist both, serve exponential
+        ensemble     serve ensemble; any failure falls back to exponential
+
+    When ``engine`` is omitted the legacy FORECAST_MODEL_VERSION mode applies
+    (exp_smoothing_v1 / shadow / ensemble_v2 map onto the canonical names).
     """
     start = time.perf_counter()
     history = await _load_history(sku_id)
     values = _v1_values(history)
     v1 = _v1_result(sku_id, current_stock, values)
     horizon = max(1, settings.forecast_horizon_days)
-    mode = _mode()
+    mode = canonical_engine(engine) or canonical_engine(_mode()) or ENGINE_EXPONENTIAL
 
     served = v1
     rows_to_write: list[Forecast] = []
     bundle: ForecastBundle | None = None
     fallback = False
 
-    if mode == "exp_smoothing_v1":
+    if mode == ENGINE_EXPONENTIAL:
         rows_to_write = [_row(v1)]
     else:
         try:
@@ -171,14 +184,14 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
                 stockout_correction=settings.forecast_stockout_correction,
             )
             v2, _ = _bundle_result(sku_id, current_stock, bundle, horizon)
-            if mode == "shadow":
+            if mode == ENGINE_SHADOW:
                 rows_to_write = [_row(v1), _row(v2)]
                 served = v1
             else:
                 rows_to_write = [_row(v2)]
                 served = v2
         except Exception:
-            logger.exception("ensemble_v2 failed for sku=%s — serving v1", sku_id)
+            logger.exception("ensemble engine failed for sku=%s — serving exponential", sku_id)
             fallback = True
             served = _v1_result(sku_id, current_stock, values, fallback=True)
             rows_to_write = [_row(served)]
@@ -191,6 +204,7 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
         metrics.inc("forecast_runs_total", model="ensemble_v2")
     if fallback:
         metrics.inc("forecast_fallback_total")
+        metrics.inc("forecast_fallback_count", reason="ensemble_error")
     metrics.observe("forecast_duration_seconds", latency_ms / 1000.0, model=served.model_version)
 
     try:
@@ -198,6 +212,7 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
 
         span = trace.get_current_span()
         span.set_attribute("forecast.model", served.model_version)
+        span.set_attribute("forecast.engine", mode)
         span.set_attribute("forecast.latency_ms", latency_ms)
         span.set_attribute("forecast.fallback", fallback)
         if served.backtest_wmape is not None:
@@ -208,8 +223,9 @@ async def calculate_forecast(sku_id: int, current_stock: int, lead_time_days: in
         pass
 
     logger.info(
-        "forecast sku=%s model=%s demand=%.2f days=%s wmape=%s fallback=%s latency_ms=%.1f",
+        "forecast sku=%s engine=%s model=%s demand=%.2f days=%s wmape=%s fallback=%s latency_ms=%.1f",
         sku_id,
+        mode,
         served.model_version,
         served.predicted_daily_demand,
         served.days_of_stock_remaining,
@@ -241,12 +257,11 @@ def _result_to_state(fr: ForecastResult) -> dict[str, Any]:
 @trace_node("forecast")
 async def forecast_node(state: State) -> State:
     skus = state.get("skus", [])
-    mode = _mode()
+    engine = canonical_engine(state.get("forecast_engine")) or canonical_engine(_mode()) or ENGINE_EXPONENTIAL
     horizon = max(1, settings.forecast_horizon_days)
-    cache_key_suffix = f"{mode}:{horizon}"
 
-    async def _forecast_one(sku: dict[str, Any]) -> dict[str, Any] | None:
-        cache_key = f"forecast:{sku['id']}:{cache_key_suffix}"
+    async def _forecast_one(sku: dict[str, Any], run_engine: str) -> dict[str, Any] | None:
+        cache_key = f"forecast:{sku['id']}:{run_engine}:{horizon}"
         cached = await forecast_cache.get(cache_key)
         if cached is not None:
             return dict(cached)
@@ -257,6 +272,7 @@ async def forecast_node(state: State) -> State:
                     sku_id=sku["id"],
                     current_stock=sku["current_stock"],
                     lead_time_days=sku.get("lead_time_days", 7),
+                    engine=run_engine,
                 ),
                 timeout=FORECAST_TIMEOUT_SECONDS,
             )
@@ -265,7 +281,44 @@ async def forecast_node(state: State) -> State:
             return result
         except TimeoutError:
             metrics.inc("forecast_timeout_total")
+            metrics.inc("forecast_fallback_count", reason="timeout")
             return None
 
-    results = [r for r in await asyncio.gather(*[_forecast_one(s) for s in skus]) if r is not None]
-    return {**state, "forecasts": results}
+    async def _gather(run_engine: str) -> list[dict[str, Any] | None]:
+        return await asyncio.gather(*[_forecast_one(s, run_engine) for s in skus])
+
+    results = [r for r in await _gather(engine) if r is not None]
+    effective_engine = engine
+    circuit_tripped = False
+
+    # Circuit breaker: too many ensemble failures/timeouts in this run →
+    # rerun every SKU on the exponential engine (cache may answer instantly).
+    if engine == ENGINE_ENSEMBLE and skus:
+        attempted = len(skus)
+        failures = (attempted - len(results)) + sum(1 for r in results if r.get("fallback_used"))
+        if failures / attempted > settings.forecast_circuit_threshold:
+            circuit_tripped = True
+            effective_engine = ENGINE_EXPONENTIAL
+            metrics.inc("forecast_fallback_count", value=float(failures), reason="circuit_breaker")
+            logger.error(
+                "forecast circuit breaker tripped: %s/%s sku runs failed (threshold %.3f) — rerunning run with exponential engine",
+                failures,
+                attempted,
+                settings.forecast_circuit_threshold,
+            )
+            results = [r for r in await _gather(effective_engine) if r is not None]
+
+    for r in results:
+        serving = ENGINE_ENSEMBLE if r.get("model_version") == "ensemble_v2" else ENGINE_EXPONENTIAL
+        metrics.inc(
+            "forecast_engine_used",
+            engine=serving,
+            merchant=str(state.get("merchant_id") or 0),
+        )
+
+    return {
+        **state,
+        "forecasts": results,
+        "forecast_engine": effective_engine,
+        "forecast_circuit_tripped": circuit_tripped,
+    }

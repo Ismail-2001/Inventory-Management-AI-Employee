@@ -81,7 +81,9 @@ flowchart LR
 | Job | Frequency | What It Does |
 |---|---|---|
 | **Outcome Evaluation** | Every 24h | Measures approved POs against actual sales; tracks forecast error |
+| **Forecast Promotion** | Every 24h | Evaluates shadow tenants against safety gates; promotes passing ones to the ensemble |
 | **Weekly Reflection** | Monday 8AM | AI generates strategic insights from acceptance rates and forecast accuracy |
+| **Forecast Engine Report** | Monday 8:30AM | Weekly engine comparison (row counts + gate snapshots) to Slack/audit log |
 | **Webhook Retry** | Every 15min | Retries failed Shopify webhooks with exponential backoff (max 3) |
 | **Checkpoint Cleanup** | Every 24h | Purges old LangGraph state data (30-day retention) |
 | **Audit Export** | Every 24h | Ships audit logs to S3 as JSONL (SigV4-signed) |
@@ -93,12 +95,14 @@ flowchart LR
 ### Demand Forecasting
 
 - **Model ensemble** (v2): SES, Holt, weekly-seasonal Holt, and Croston for intermittent demand — best model selected per SKU by hold-out wMAPE, with blending when candidates tie
-- **Shadow-first rollout**: dev/CI compute both models and persist both rows; production serves legacy v1 until backtest numbers justify the flip (`FORECAST_MODEL_VERSION`)
+- **Merchant-level engine promotion**: every run resolves its engine per tenant (`FORECAST_ENGINE_OVERRIDE` kill switch → `merchants.forecast_engine` → `FORECAST_ENGINE_DEFAULT`); existing tenants park on shadow and auto-promote to the ensemble only after 14 shadow days + accuracy/bias/coverage gates pass
+- **Run-level circuit breaker**: if more than 5% of a run's SKUs fail ensemble compute, the run reruns on exponential smoothing and alerts (`FORECAST_CIRCUIT_BREAKER_THRESHOLD`)
+- **Shadow-first measurement**: both engines persist rows in shadow mode — the weekly engine report compares them per tenant
 - **Confidence intervals**: MAD-based p10/p90 demand band and days-of-cover at both ends for safety-stock decisions
 - **Stockout correction**: censored (out-of-stock) zero days are imputed instead of dragging demand to zero
 - **Optional Prophet**: install `requirements-forecast.txt` to add it as an ensemble candidate — timeouts + circuit breaker keep the pipeline safe, tier-0 fallback when unavailable
 - **Redis-backed TTL cache** (10-min) with in-memory fallback, parallel execution with per-SKU timeout
-- Backtest CLI + docs: [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md)
+- Backtest CLI + docs: [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ENGINE-RUNBOOK.md`](docs/FORECAST-ENGINE-RUNBOOK.md)
 
 ### Stockout Risk Detection
 
@@ -132,6 +136,15 @@ flowchart LR
 - **Idempotency-key support** for safe retries on approval/rejection
 - **Signed action tokens** enable secure approval links without exposing API keys
 
+### Chat Assistant (Natural Language)
+
+- **Streaming chat API**: `POST /api/v1/chat` runs a LangGraph tool-calling loop over live data and streams answers as Server-Sent Events (`start`, `delta`, `tool`, `message`, `error`)
+- **Six read-only tools**: inventory status, SKU details, supplier lookup, demand forecast, reorder quantity, forecast accuracy
+- **Proposed actions, human confirm**: `draft_purchase_order` never executes — it surfaces a pending action you confirm or cancel, creating a `pending_approval` PO
+- **Conversation history**: persisted per merchant, replayable via `GET /api/v1/chat/history`
+- **Chat UI**: `/chat` page with live tool chips, amber confirm/cancel action cards, and a conversation switcher
+- Full guide: [`docs/CHAT-AGENT.md`](docs/CHAT-AGENT.md)
+
 ### Reporting & Analytics
 
 - **Weekly AI reflection**: strategic insights on forecast accuracy and PO acceptance rates
@@ -139,6 +152,15 @@ flowchart LR
 - **Outcome evaluation**: tracks approved POs against actual sales to measure forecast error
 - **Metrics API**: acceptance rates, forecast error summary, stockout rates
 - **Recharts-powered dashboard** for visual analytics (included frontend)
+
+### ROI & Performance Dashboard
+
+- **Default landing page** (`/`) with date-range filters (7d / 30d / 90d / custom) over one aggregated payload
+- **Value & efficiency**: value generated (stockouts protected + capital freed), LLM cost, ROI multiple, hours saved
+- **Operational impact**: stockouts avoided, excess avoided, PO acceptance, time-to-decision, ensemble-vs-baseline forecast accuracy with trend
+- **Health**: at-risk SKUs, forecast coverage + confidence-interval distribution, engine fallback rate
+- **Every number is explainable**: per-metric info popovers plus an on-page "How we calculate these numbers" panel
+- **API**: `GET /api/v1/roi?days=…` (or `?start=&end=`) — see [`docs/ROI-DASHBOARD.md`](docs/ROI-DASHBOARD.md)
 
 ### Enterprise: SSO Authentication
 
@@ -198,7 +220,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — 8-check PR gate → Trivy scan → GHCR push → staging/prod deploy |
-| **Testing** | 232 tests — backend unit/integration/eval/contracts (162) + frontend Vitest (53) + Playwright E2E (17) |
+| **Testing** | 350+ tests — backend unit/integration/eval/contracts + frontend Vitest (64) + Playwright E2E (18) |
 
 ---
 
@@ -220,6 +242,23 @@ flowchart LR
 | `POST` | `/api/v1/po/{id}/approve` | API Key + role | 5/min | Approve with optional `?quantity=` override |
 | `POST` | `/api/v1/po/{id}/reject` | API Key + role | 5/min | Reject with optional reason |
 | `GET` | `/api/v1/po/action` | Signed token | — | One-click approve/reject from Slack links |
+
+### Chat
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/chat` | API Key | Stream one conversational turn (SSE: `start`, `delta`, `tool`, `message`, `error`) |
+| `GET` | `/api/v1/chat/history?conversation_id=` | API Key | Replay stored messages for a conversation |
+| `GET` | `/api/v1/chat/conversations` | API Key | Recent conversations (id, preview, counts) |
+| `POST` | `/api/v1/chat/actions/{id}/confirm` | API Key | Confirm a pending action → creates `pending_approval` PO |
+| `POST` | `/api/v1/chat/actions/{id}/cancel` | API Key | Cancel a pending action |
+
+### ROI Dashboard
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/roi?days=30` | API Key | ROI & performance report for the last N days (1–365) |
+| `GET` | `/api/v1/roi?start=&end=` | API Key | Same report for an inclusive custom range (≤ 366 days) |
 
 ### SSO Authentication
 
@@ -260,6 +299,8 @@ flowchart LR
 |---|---|---|---|
 | `GET` | `/api/v1/skus` | API Key | List all SKUs with stock levels |
 | `GET` | `/api/v1/metrics` | API Key | PO acceptance rate + forecast error summary |
+| `GET` | `/api/v1/forecast-engine` | API Key | Resolved forecast engine + gate evaluation (`?evaluate=true`) |
+| `POST` | `/api/v1/forecast-engine` | API Key | Set this tenant's engine (kill switch / demotion) |
 | `GET` | `/api/v1/usage/summary` | API Key | 7-day aggregates (POs, alerts, LLM cost) |
 | `GET` | `/api/v1/usage/daily` | API Key | 14-day time-series for charting |
 | `GET` | `/api/v1/config` | None | Frontend config (auth mode, SSO providers) |
@@ -403,12 +444,36 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | Variable | Default | Description |
 |---|---|---|
 | `FORECAST_MODEL_VERSION` | `shadow` (prod: `exp_smoothing_v1`) | Served model: `exp_smoothing_v1`, `shadow` (compute both, serve v1), or `ensemble_v2` |
+| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for tenants without a stored per-merchant flag |
+| `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run's engine (`exponential` = demote everyone) |
+| `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort share (`merchant_id % 100 < percent`) |
+| `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |
 | `FORECAST_MODEL_PROPHET` | `true` | Use Prophet as an ensemble candidate when installed |
 | `FORECAST_HORIZON_DAYS` | `30` | Forecast horizon |
 | `FORECAST_HISTORY_DAYS` | `180` | Per-SKU history window |
 | `FORECAST_STOCKOUT_CORRECTION` | `true` | Impute censored (stockout) zero-sales days |
 
-See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md) and [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md).
+See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), and [`docs/FORECAST-ENGINE-RUNBOOK.md`](docs/FORECAST-ENGINE-RUNBOOK.md).
+
+### Chat Agent
+
+| Variable | Default | Description |
+|---|---|---|
+| `CHAT_MAX_STEPS` | `6` | Max LangGraph tool-calling iterations per chat turn |
+| `CHAT_MAX_INPUT_CHARS` | `4000` | Reject user messages longer than this |
+| `CHAT_HISTORY_MESSAGES` | `20` | Prior messages replayed to the LLM as context |
+| `CHAT_ACTION_TTL_MINUTES` | `15` | Lifetime of proposed (pending) chat actions |
+
+See [`docs/CHAT-AGENT.md`](docs/CHAT-AGENT.md).
+
+### ROI Dashboard
+
+| Variable | Default | Description |
+|---|---|---|
+| `ROI_REVENUE_MULTIPLIER` | `2.0` | Revenue markup applied to stockout-protected units |
+| `ROI_MANUAL_PO_MINUTES` | `12` | Manual minutes replaced by each decided PO (hours-saved basis) |
+
+See [`docs/ROI-DASHBOARD.md`](docs/ROI-DASHBOARD.md).
 
 ### Monitoring & Alerting
 
@@ -508,7 +573,7 @@ A React 19 dashboard ships with the agent. It provides operational visibility in
 
 | Page | Purpose |
 |---|---|
-| **Dashboard** | Overview cards (total SKUs, pending POs, alerts) + Run Sync button + forecast accuracy |
+| **Dashboard** | ROI landing page: value generated, LLM cost, ROI, hours saved, stockouts avoided, PO decisions, forecast accuracy, health panels — with date-range filters |
 | **Inventory** | Full SKU table with stock levels, lead times, and current status |
 | **Purchase Orders** | Pending approval queue with approve/reject UI and quantity override |
 | **Analytics** | Recharts-powered bar charts: PO acceptance rates + forecast error distribution |
@@ -528,8 +593,8 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Backend — full test suite (162 tests)
-pytest tests/ -v
+# Backend — full test suite (255 unit tests, no Postgres required)
+pytest tests/ -v --ignore=tests/test_integration.py
 
 # Backend — unit tests only (no external dependencies)
 pytest tests/ -v --ignore=tests/test_integration.py
@@ -546,7 +611,7 @@ pytest tests/test_webhook_contracts.py -v
 # Backend — enterprise feature tests (SSO, audit, branding)
 pytest tests/test_enterprise.py -v
 
-# Frontend — unit tests (53 tests, Vitest + React Testing Library)
+# Frontend — unit tests (58 tests, Vitest + React Testing Library)
 cd inventory-frontend
 npm test
 

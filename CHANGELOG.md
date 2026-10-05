@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Natural-language chat agent: `POST /api/v1/chat` SSE endpoint with LangGraph tool-calling
+  over live data, conversation history endpoints, and human-confirmed write actions
+  (`/api/v1/chat/actions/{id}/confirm|cancel` that always create `pending_approval` POs).
+- `/chat` frontend page with streaming responses, tool chips, and confirm/cancel action cards.
+- `chat_messages` table (migration `017_chat_messages`) plus `CHAT_*` settings
+  (`CHAT_MAX_STEPS`, `CHAT_MAX_INPUT_CHARS`, `CHAT_HISTORY_MESSAGES`, `CHAT_ACTION_TTL_MINUTES`).
+- Tool-calling and streaming support in `shared/llm_client.py` (`call_with_tools`, `call_stream`)
+  for OpenAI- and Gemini-compatible providers.
+- Docs: `docs/CHAT-AGENT.md`.
+- ROI & performance dashboard: `GET /api/v1/roi` aggregation endpoint (`agent/roi.py`) with
+  date-range filters (`days=1-365` or inclusive `start`/`end`), covering value generated,
+  LLM cost, ROI multiple, hours saved, stockouts avoided, excess avoided, PO acceptance +
+  time-to-decision, ensemble-vs-baseline forecast accuracy, at-risk SKUs, forecast coverage /
+  confidence distribution, and engine fallback rate. Settings `ROI_REVENUE_MULTIPLIER`
+  (default 2.0) and `ROI_MANUAL_PO_MINUTES` (default 12) make the assumptions explicit.
+- Dashboard rebuild: the default landing page is now the ROI dashboard with 7d/30d/90d/custom
+  range filters, per-metric methodology popovers (`MetricHelp`), accuracy trend chart, and an
+  on-page "How we calculate these numbers" panel. Methodology doc: `docs/ROI-DASHBOARD.md`.
+- Per-merchant forecast engine promotion (`ensemble | exponential | shadow`) with a
+  14-day holdout safety-gate evaluation, daily auto-promotion job, admin API
+  (`/api/v1/forecast-engine`), Prometheus metrics and alerts, and
+  `docs/FORECAST-ENGINE-RUNBOOK.md`.
+- Rolling-origin backtest with velocity-tier breakdown
+  (`scripts/forecast_backtest.py --folds`) and the promotion decision memo
+  (`docs/FORECAST-PROMOTION-MEMO.md`).
+
+### Changed
+- Risk and PO Draft nodes consume forecast confidence bands: risk escalates on
+  p90 days-of-cover, PO quantities plan against p90 demand (point forecast is
+  kept when bands are absent or lower).
+- Forecast engine defaults are measure-first: all tenants start on `shadow`
+  (migration `016` + column default) and `FORECAST_ENGINE_DEFAULT` defaults to
+  `shadow`; only the per-tenant promotion gates flip a tenant to `ensemble`.
+
 ## [1.0.0] - 2026-08-10
 
 ### Added

@@ -7,6 +7,7 @@ import Inventory from './pages/Inventory'
 import PurchaseOrders from './pages/PurchaseOrders'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import Chat from './pages/Chat'
 
 function PageTransition({ children }: { children: React.ReactNode }) {
   return (
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
             <Route path="/inventory" element={<PageTransition><Inventory /></PageTransition>} />
             <Route path="/purchase-orders" element={<PageTransition><PurchaseOrders /></PageTransition>} />
+            <Route path="/chat" element={<PageTransition><Chat /></PageTransition>} />
             <Route path="/analytics" element={<PageTransition><Analytics /></PageTransition>} />
             <Route path="/settings" element={<PageTransition><Settings /></PageTransition>} />
           </Routes>

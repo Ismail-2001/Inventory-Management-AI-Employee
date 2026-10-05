@@ -19,7 +19,7 @@ _idempotency_cache: dict[str, dict[str, Any]] = {}
 _IDEMPOTENCY_CACHE_MAX = 500
 
 
-async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
+async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str | None]:
     async with session_scope(async_session_factory) as session:
         result = await session.execute(select(PurchaseOrder).where(PurchaseOrder.id == po_id).with_for_update())
         po = result.scalar_one_or_none()
@@ -27,8 +27,9 @@ async def _resolve_po(po_id: int) -> tuple[PurchaseOrder, str]:
             raise HTTPException(status_code=404, detail="Purchase order not found")
         if po.status != POStatus.pending_approval:
             raise HTTPException(status_code=400, detail=f"PO is already {po.status.value}")
-        if not po.thread_id:
-            raise HTTPException(status_code=400, detail="No active approval thread for this PO")
+        # POs created outside the graph (e.g. confirmed chat actions) have no
+        # approval thread; graph-created POs carry one and are resumed on
+        # approve/reject to advance the notify interrupt.
         thread_id = po.thread_id
     return po, thread_id
 
@@ -156,7 +157,8 @@ async def _approve_po_impl(
 ) -> dict[str, Any]:
     po, thread_id = await _resolve_po(po_id)
     await _mark_edited_if_changed(po_id, quantity)
-    await _resume_graph(request, thread_id, "approve")
+    if thread_id:
+        await _resume_graph(request, thread_id, "approve")
     await _update_po_status(
         po_id,
         POStatus.approved,
@@ -178,7 +180,8 @@ async def _approve_po_impl(
 
 async def _reject_po_impl(request: Request, po_id: int, reason: str, merchant_id: int | None = None) -> dict[str, Any]:
     po, thread_id = await _resolve_po(po_id)
-    await _resume_graph(request, thread_id, "reject")
+    if thread_id:
+        await _resume_graph(request, thread_id, "reject")
     await _update_po_status(po_id, POStatus.rejected, rejected_reason=reason or None)
     await log_audit_event(
         merchant_id=merchant_id,
@@ -245,7 +248,8 @@ async def po_action_via_token(
     if action == "approve":
         po, thread_id = await _resolve_po(po_id)
         await _mark_edited_if_changed(po_id, quantity)
-        await _resume_graph(request, thread_id, "approve")
+        if thread_id:
+            await _resume_graph(request, thread_id, "approve")
         await _update_po_status(
             po_id,
             POStatus.approved,
@@ -256,7 +260,8 @@ async def po_action_via_token(
         return {"status": "approved", "po_id": po_id}
     elif action == "reject":
         po, thread_id = await _resolve_po(po_id)
-        await _resume_graph(request, thread_id, "reject")
+        if thread_id:
+            await _resume_graph(request, thread_id, "reject")
         await _update_po_status(po_id, POStatus.rejected, rejected_reason=reason or None)
         return {"status": "rejected", "po_id": po_id}
     else:

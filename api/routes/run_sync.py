@@ -1,15 +1,39 @@
 import asyncio
+import logging
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from agent.auth import verify_api_key
+from agent.forecast_engine import resolve_engine
 from agent.models import Merchant
 from api.rate_limit import limiter
 from shared.task_queue import task_queue
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _initial_state(merchant: Merchant, thread_id: str) -> dict[str, Any]:
+    """Resolve the forecast engine once per run (override > merchant > default)."""
+    engine, source = resolve_engine(
+        merchant_engine=getattr(merchant, "forecast_engine", None),
+        merchant_id=getattr(merchant, "id", None),
+    )
+    logger.debug(
+        "run start merchant=%s forecast_engine=%s source=%s thread=%s",
+        getattr(merchant, "id", None),
+        engine,
+        source,
+        thread_id,
+    )
+    return {
+        "merchant_id": merchant.id,
+        "thread_id": thread_id,
+        "forecast_engine": engine,
+    }
 
 
 @router.post("/api/v1/run-sync")
@@ -25,7 +49,7 @@ async def run_sync(request: Request, merchant: Merchant = Depends(verify_api_key
     try:
         result = await asyncio.wait_for(
             graph.ainvoke(
-                {"merchant_id": merchant.id, "thread_id": thread_id},
+                _initial_state(merchant, thread_id),
                 {"configurable": {"thread_id": thread_id}},
             ),
             timeout=120.0,
@@ -56,7 +80,7 @@ async def run_sync_async(request: Request, merchant: Merchant = Depends(verify_a
     """
     thread_id = str(uuid.uuid4())
     task_id = await task_queue.enqueue(
-        {"merchant_id": merchant.id, "thread_id": thread_id},
+        _initial_state(merchant, thread_id),
         {"configurable": {"thread_id": thread_id}},
     )
     return {

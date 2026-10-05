@@ -67,6 +67,9 @@ class Merchant(Base):
     shopify_store_domain: Mapped[str] = mapped_column(String(256), nullable=False)
     tier: Mapped[str] = mapped_column(String(16), default=MerchantTier.developer.value)
     branding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default={})
+    # Forecast engine selection: ensemble | exponential | shadow.
+    forecast_engine: Mapped[str] = mapped_column(String(16), default="shadow", nullable=False, server_default="shadow")
+    forecast_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -220,6 +223,34 @@ class LlmUsage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (Index("ix_llm_usage_created", "created_at"),)
+
+
+class ChatMessage(Base):
+    """One turn of a chat conversation (user prompt or assistant reply).
+
+    merchant_id has no FK on purpose: the demo API key authenticates as
+    merchant id 0, which does not exist in the merchants table.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    merchant_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(128))
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Proposed write actions awaiting human confirmation (assistant messages only).
+    actions: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    # Tools the assistant ran this turn: name, ok, elapsed_ms, summary.
+    tool_trace: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    model: Mapped[str | None] = mapped_column(String(64))
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    cost_usd: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_chat_merchant_conversation_created", "merchant_id", "conversation_id", "created_at"),)
 
 
 class IdempotencyKey(Base):
