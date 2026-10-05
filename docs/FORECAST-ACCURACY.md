@@ -72,8 +72,27 @@ Every persisted `Forecast` row keeps its own quality fields (migration `015`):
 > backscript against the deployed database after go-live and pasting the
 > summary table here. Until then, the synthetic CI guard is the reference.
 
+## Promotion gates
+
+The daily auto-promotion job reuses these metrics as hard gates before a
+shadow merchant is flipped to the ensemble (thresholds live in
+`agent/forecast_engine.py`):
+
+| Gate | Threshold |
+|---|---|
+| Paired shadow days | ≥ 14 |
+| Evaluable SKUs | ≥ 3 with ≥ 28 days history |
+| MAPE ratio (ensemble / exponential, 14-day hold-out, pooled by positive days) | ≤ 0.85 — and fails outright when exponential MAPE is 0 |
+| High-velocity bias (SKUs ≥ 5 units/day) | \|bias\| ≤ 8% |
+| 50% interval coverage | ≥ 0.45 |
+
+See [FORECAST-ENGINE-RUNBOOK.md](FORECAST-ENGINE-RUNBOOK.md) for the full
+procedure, metrics, and demotion steps.
+
 ## Related
 
 - [FORECAST-TUNING.md](FORECAST-TUNING.md) — flags, models, rollout procedure
+- [FORECAST-ENGINE-RUNBOOK.md](FORECAST-ENGINE-RUNBOOK.md) — engine promotion gates and operations
 - `scripts/forecast_backtest.py` — backtest CLI
 - `tests/test_forecast_ensemble.py` — accuracy guards
+- `tests/test_forecast_promotion.py` — promotion-gate guards

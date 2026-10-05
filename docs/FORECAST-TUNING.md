@@ -20,6 +20,30 @@ If `ensemble_v2` fails for any reason (bad data, model error), the node logs
 the exception, increments `forecast_fallback_total`, and serves v1 — the
 pipeline never fails because of forecasting.
 
+## Engine selection (merchant-level)
+
+`FORECAST_MODEL_VERSION` is the global/legacy switch. On top of it, each run
+resolves a **canonical engine** (`ensemble | exponential | shadow`) once at
+run start:
+
+```
+FORECAST_ENGINE_OVERRIDE  >  merchants.forecast_engine  >  FORECAST_ENGINE_DEFAULT  >  shadow
+   (kill switch)              (per-merchant flag)           (default: shadow)
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for merchants without a stored flag |
+| `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run (`exponential` = demote everyone) |
+| `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort: `merchant_id % 100 < percent` |
+| `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |
+
+Existing tenants are parked on `shadow` by migration `016`; the daily
+promotion job flips them to `ensemble` only after the safety gates pass.
+Operators can inspect/override per tenant via
+`GET/POST /api/v1/forecast-engine`. Full procedures:
+[FORECAST-ENGINE-RUNBOOK.md](FORECAST-ENGINE-RUNBOOK.md).
+
 ## Ensemble v2 candidate models
 
 `build_ensemble()` (in `agent/forecast.py`) fits each candidate on the SKU's
@@ -83,27 +107,43 @@ pip install -r requirements-forecast.txt
 | Metric | Meaning |
 |---|---|
 | `forecast_runs_total{model}` | Runs per model version (v1 / v2) |
+| `forecast_engine_used{engine,merchant}` | Which engine actually served each run |
 | `forecast_fallback_total` | v2 failures that fell back to v1 — should stay ~0 |
+| `forecast_fallback_count{reason}` | `ensemble_error` / `timeout` / `circuit_breaker` breakdown |
+| `forecast_mape_ratio{merchant}` | Daily promotion-gate snapshot (> 0.85 would not promote) |
+| `forecast_promotion_gate_pass{merchant}` | 1 when all gates pass for a shadow tenant |
+| `forecast_promotion_status{merchant,engine}` | 1 for each tenant's current engine |
 | `forecast_duration_seconds{model}` | Per-run latency (12s node timeout, 10s cache TTL) |
 
-## Rollout procedure (shadow-first)
+## Rollout procedure (merchant-level, shadow-first)
 
-1. **Dev/CI** runs `shadow` from day one — both rows persisted, v1 served.
+1. **All merchants** start on `shadow` (column default + migration `016`) —
+   both engines persist every run, exponential is served, and the safety
+   gates decide promotion.
 2. Run the backtest against real history: `py -3.12 scripts/forecast_backtest.py`
    (see [FORECAST-ACCURACY.md](FORECAST-ACCURACY.md)).
-3. If v2 pooled wMAPE ≤ v1 and coverage ≈ 0.80, set in production:
+3. The daily `daily_forecast_promotions` job promotes each shadow tenant
+   once its gates pass (≥14 paired shadow days, MAPE ratio ≤ 0.85, bias and
+   coverage checks) — or promote one manually:
 
    ```bash
-   fly secrets set FORECAST_MODEL_VERSION=ensemble_v2
+   curl -X POST -H "x-api-key: $KEY" -H "content-type: application/json" \
+     -d '{"engine": "ensemble"}' https://your-api/api/v1/forecast-engine
    ```
 
-4. Watch `forecast_fallback_total` and per-SKU `backtest_wmape` in the
-   `forecasts` table for a week. Revert by setting the variable back to
-   `exp_smoothing_v1` (no redeploy needed).
+4. Watch `forecast_fallback_count{reason}` and `forecast_mape_ratio`.
+   Demote a tenant (or everyone) by POSTing `exponential` or setting
+   `FORECAST_ENGINE_OVERRIDE=exponential` — no redeploy needed.
+
+The global `FORECAST_MODEL_VERSION` flag still applies as the fallback for
+runs that carry no merchant-level engine (direct `graph.ainvoke` callers).
 
 ## Related
 
+- [FORECAST-ENGINE-RUNBOOK.md](FORECAST-ENGINE-RUNBOOK.md) — promotion gates, kill switches, admin API, alerts
 - [FORECAST-ACCURACY.md](FORECAST-ACCURACY.md) — metrics, backtest, baselines
 - `agent/forecast.py` — ensemble engine (pure functions)
+- `agent/forecast_engine.py` — engine resolution, gates, promotion job
 - `agent/forecast_prophet.py` — optional Prophet adapter
 - `tests/test_forecast_ensemble.py` — model math + no-regression guard
+- `tests/test_forecast_promotion.py` — gates, breaker, admin API

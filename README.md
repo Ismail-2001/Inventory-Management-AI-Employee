@@ -81,7 +81,9 @@ flowchart LR
 | Job | Frequency | What It Does |
 |---|---|---|
 | **Outcome Evaluation** | Every 24h | Measures approved POs against actual sales; tracks forecast error |
+| **Forecast Promotion** | Every 24h | Evaluates shadow tenants against safety gates; promotes passing ones to the ensemble |
 | **Weekly Reflection** | Monday 8AM | AI generates strategic insights from acceptance rates and forecast accuracy |
+| **Forecast Engine Report** | Monday 8:30AM | Weekly engine comparison (row counts + gate snapshots) to Slack/audit log |
 | **Webhook Retry** | Every 15min | Retries failed Shopify webhooks with exponential backoff (max 3) |
 | **Checkpoint Cleanup** | Every 24h | Purges old LangGraph state data (30-day retention) |
 | **Audit Export** | Every 24h | Ships audit logs to S3 as JSONL (SigV4-signed) |
@@ -93,12 +95,14 @@ flowchart LR
 ### Demand Forecasting
 
 - **Model ensemble** (v2): SES, Holt, weekly-seasonal Holt, and Croston for intermittent demand — best model selected per SKU by hold-out wMAPE, with blending when candidates tie
-- **Shadow-first rollout**: dev/CI compute both models and persist both rows; production serves legacy v1 until backtest numbers justify the flip (`FORECAST_MODEL_VERSION`)
+- **Merchant-level engine promotion**: every run resolves its engine per tenant (`FORECAST_ENGINE_OVERRIDE` kill switch → `merchants.forecast_engine` → `FORECAST_ENGINE_DEFAULT`); existing tenants park on shadow and auto-promote to the ensemble only after 14 shadow days + accuracy/bias/coverage gates pass
+- **Run-level circuit breaker**: if more than 5% of a run's SKUs fail ensemble compute, the run reruns on exponential smoothing and alerts (`FORECAST_CIRCUIT_BREAKER_THRESHOLD`)
+- **Shadow-first measurement**: both engines persist rows in shadow mode — the weekly engine report compares them per tenant
 - **Confidence intervals**: MAD-based p10/p90 demand band and days-of-cover at both ends for safety-stock decisions
 - **Stockout correction**: censored (out-of-stock) zero days are imputed instead of dragging demand to zero
 - **Optional Prophet**: install `requirements-forecast.txt` to add it as an ensemble candidate — timeouts + circuit breaker keep the pipeline safe, tier-0 fallback when unavailable
 - **Redis-backed TTL cache** (10-min) with in-memory fallback, parallel execution with per-SKU timeout
-- Backtest CLI + docs: [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md)
+- Backtest CLI + docs: [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ENGINE-RUNBOOK.md`](docs/FORECAST-ENGINE-RUNBOOK.md)
 
 ### Stockout Risk Detection
 
@@ -295,6 +299,8 @@ flowchart LR
 |---|---|---|---|
 | `GET` | `/api/v1/skus` | API Key | List all SKUs with stock levels |
 | `GET` | `/api/v1/metrics` | API Key | PO acceptance rate + forecast error summary |
+| `GET` | `/api/v1/forecast-engine` | API Key | Resolved forecast engine + gate evaluation (`?evaluate=true`) |
+| `POST` | `/api/v1/forecast-engine` | API Key | Set this tenant's engine (kill switch / demotion) |
 | `GET` | `/api/v1/usage/summary` | API Key | 7-day aggregates (POs, alerts, LLM cost) |
 | `GET` | `/api/v1/usage/daily` | API Key | 14-day time-series for charting |
 | `GET` | `/api/v1/config` | None | Frontend config (auth mode, SSO providers) |
@@ -438,12 +444,16 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 | Variable | Default | Description |
 |---|---|---|
 | `FORECAST_MODEL_VERSION` | `shadow` (prod: `exp_smoothing_v1`) | Served model: `exp_smoothing_v1`, `shadow` (compute both, serve v1), or `ensemble_v2` |
+| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for tenants without a stored per-merchant flag |
+| `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run's engine (`exponential` = demote everyone) |
+| `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort share (`merchant_id % 100 < percent`) |
+| `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |
 | `FORECAST_MODEL_PROPHET` | `true` | Use Prophet as an ensemble candidate when installed |
 | `FORECAST_HORIZON_DAYS` | `30` | Forecast horizon |
 | `FORECAST_HISTORY_DAYS` | `180` | Per-SKU history window |
 | `FORECAST_STOCKOUT_CORRECTION` | `true` | Impute censored (stockout) zero-sales days |
 
-See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md) and [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md).
+See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), and [`docs/FORECAST-ENGINE-RUNBOOK.md`](docs/FORECAST-ENGINE-RUNBOOK.md).
 
 ### Chat Agent
 

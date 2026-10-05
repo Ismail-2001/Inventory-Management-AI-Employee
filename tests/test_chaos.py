@@ -103,7 +103,7 @@ async def test_forecast_node_survives_redis_outage(monkeypatch):
 
     calls: list[dict] = []
 
-    async def fake_calculate_forecast(sku_id: int, current_stock: int, lead_time_days: int):
+    async def fake_calculate_forecast(sku_id: int, current_stock: int, lead_time_days: int, **kwargs):
         calls.append({"sku_id": sku_id, "stock": current_stock, "lead": lead_time_days})
         return fn.ForecastResult(sku_id=sku_id, predicted_daily_demand=3.5, days_of_stock_remaining=4.0)
 

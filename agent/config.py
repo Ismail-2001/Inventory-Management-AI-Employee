@@ -118,6 +118,26 @@ class Settings:
     chat_action_ttl_minutes: int = field(
         default_factory=lambda: max(1, int(os.getenv("CHAT_ACTION_TTL_MINUTES", "15")))
     )
+    # Forecast engine promotion (merchant-level). Resolution precedence:
+    #   FORECAST_ENGINE_OVERRIDE > merchants.forecast_engine > FORECAST_ENGINE_DEFAULT.
+    # Engines: ensemble | exponential | shadow. The override is the global kill
+    # switch (set FORECAST_ENGINE_OVERRIDE=exponential to demote everyone).
+    forecast_engine_override: str = field(
+        default_factory=lambda: os.getenv("FORECAST_ENGINE_OVERRIDE", "").strip().lower()
+    )
+    forecast_engine_default: str = field(
+        default_factory=lambda: os.getenv("FORECAST_ENGINE_DEFAULT", "shadow").strip().lower()
+    )
+    # Auto-promotion cohort: only merchants with id % 100 < percent are flipped
+    # shadow -> ensemble by the daily promotion job (100 = everyone).
+    forecast_rollout_percent: int = field(
+        default_factory=lambda: max(0, min(100, int(os.getenv("FORECAST_ENGINE_ROLLOUT_PERCENT", "100"))))
+    )
+    # Run-level circuit breaker: ensemble failure/timeout rate above this
+    # fraction of SKUs falls the whole run back to exponential smoothing.
+    forecast_circuit_threshold: float = field(
+        default_factory=lambda: max(0.0, float(os.getenv("FORECAST_CIRCUIT_BREAKER_THRESHOLD", "0.05")))
+    )
 
     # ROI dashboard assumptions (see docs/ROI-DASHBOARD.md).
     roi_revenue_multiplier: float = field(

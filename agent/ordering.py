@@ -2,6 +2,15 @@ import math
 from typing import Any
 
 
+def planning_daily_demand(
+    predicted_daily_demand: float,
+    p90_daily_demand: float | None = None,
+) -> float:
+    if not p90_daily_demand or p90_daily_demand <= 0:
+        return predicted_daily_demand
+    return max(predicted_daily_demand, p90_daily_demand)
+
+
 def calculate_reorder_quantity(
     predicted_daily_demand: float,
     current_stock: int,
@@ -33,14 +42,18 @@ def build_reasoning_input(
     risk_level: str,
     reorder_quantity: int,
     moq: int,
+    p90_daily_demand: float | None = None,
 ) -> dict[str, Any]:
+    inventory: dict[str, Any] = {
+        "current_stock": current_stock,
+        "predicted_daily_demand": predicted_daily_demand,
+        "days_of_stock_remaining": round(days_of_stock_remaining, 1) if days_of_stock_remaining else None,
+    }
+    if p90_daily_demand is not None:
+        inventory["p90_daily_demand"] = p90_daily_demand
     return {
         "product": {"title": sku_title, "sku": sku_code},
-        "inventory": {
-            "current_stock": current_stock,
-            "predicted_daily_demand": predicted_daily_demand,
-            "days_of_stock_remaining": round(days_of_stock_remaining, 1) if days_of_stock_remaining else None,
-        },
+        "inventory": inventory,
         "supplier": {"lead_time_days": lead_time_days, "moq": moq},
         "risk_level": risk_level,
         "recommended_reorder_quantity": reorder_quantity,
