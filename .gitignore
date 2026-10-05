@@ -21,3 +21,4 @@ inventory-frontend/test-results/
 inventory-frontend/playwright-report/
 # backtest report artifacts
 backtest-*.json
+bt-*.json
