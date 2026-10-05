@@ -294,11 +294,20 @@ def test_short_series_uses_no_holdout_path():
 
 
 def test_stockout_correction_flag():
-    values = [5.0, 5.0, 5.0, 0.0, 5.0, 5.0, 5.0] * 8
+    # >= 10 u/day so the velocity gate leaves imputation eligible
+    values = [15.0, 15.0, 15.0, 0.0, 15.0, 15.0, 15.0] * 8
     on = build_ensemble(_rows(values), HORIZON, stockout_correction=True)
     off = build_ensemble(_rows(values), HORIZON, stockout_correction=False)
     assert on.meta["imputed_days"] > 0
     assert off.meta["imputed_days"] == 0
+
+
+def test_stockout_imputation_skipped_below_trend_min():
+    # low-volume series: bracketed zeros are structural, not censored demand
+    values = [5.0, 5.0, 5.0, 0.0, 5.0, 5.0, 5.0] * 8
+    bundle = build_ensemble(_rows(values), HORIZON, stockout_correction=True)
+    assert bundle.meta["velocity_daily"] < 10.0
+    assert bundle.meta["imputed_days"] == 0
 
 
 def test_strong_external_candidate_wins():
@@ -333,6 +342,23 @@ def test_candidate_scores_recorded():
     assert "ses" in bundle.meta["candidates"]
     assert "holt" in bundle.meta["candidates"]
     assert bundle.wmape >= 0
+
+
+def test_low_velocity_series_excludes_trend_models():
+    # Rising series below 10 units/day: holt fits it, but must not be eligible.
+    values = [round(4 + 0.1 * i + (i % 5) * 0.2, 2) for i in range(60)]
+    bundle = build_ensemble(_rows(values), HORIZON)
+    assert bundle.meta["velocity_daily"] < 10.0
+    assert set(bundle.meta["candidates"]) <= {"ses", "mean", "croston"}
+    assert "holt" not in bundle.model
+    assert "seasonal" not in bundle.model
+
+
+def test_high_velocity_series_keeps_trend_models():
+    values = [round(12 + 0.1 * i + (i % 5) * 0.2, 2) for i in range(60)]
+    bundle = build_ensemble(_rows(values), HORIZON)
+    assert bundle.meta["velocity_daily"] >= 10.0
+    assert "holt" in bundle.meta["candidates"]
 
 
 # ---------------------------------------------------------------------------

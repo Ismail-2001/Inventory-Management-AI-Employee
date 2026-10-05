@@ -38,9 +38,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk and PO Draft nodes consume forecast confidence bands: risk escalates on
   p90 days-of-cover, PO quantities plan against p90 demand (point forecast is
   kept when bands are absent or lower).
-- Forecast engine defaults are measure-first: all tenants start on `shadow`
-  (migration `016` + column default) and `FORECAST_ENGINE_DEFAULT` defaults to
-  `shadow`; only the per-tenant promotion gates flip a tenant to `ensemble`.
+- **Ensemble promoted to the default primary engine** (migration `018` +
+  column default + `FORECAST_ENGINE_DEFAULT`, which now defaults to
+  `ensemble` and flips existing `shadow` rows). Rollout remains protected by
+  the `FORECAST_ENGINE_OVERRIDE` kill switch, per-merchant demotion, the
+  promotion gates job for anything parked on `shadow`, and Prometheus alerts
+  — decision record: `docs/FORECAST-PROMOTION-MEMO.md` (all five offline
+  criteria pass after the medium-tier regression was fixed).
+- Forecast model selection is velocity-gated (`TREND_MIN_DAILY = 10` u/day
+  in `agent/forecast.py`): below the threshold only flat candidates
+  (`ses`/`mean`/`croston`) are eligible and censored-demand (stockout)
+  imputation is skipped — trend winners on short, noisy medium-velocity
+  series were the root cause of the +11.8% medium-tier regression.
+
+### Fixed
+- Backtest scoring is now calendar-aligned (`aligned_actual()`): hold-out
+  actuals are 0-filled per calendar day, so horizon day *i* always compares
+  against the same calendar day. Previously, SKUs that skip zero-sale days
+  (only the medium tier in the demo seed) were scored against mis-aligned
+  sale rows. High-tier numbers are unchanged (no gap days in their windows).
 
 ## [1.0.0] - 2026-08-10
 

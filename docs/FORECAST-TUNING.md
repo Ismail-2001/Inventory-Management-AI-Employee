@@ -28,19 +28,21 @@ run start:
 
 ```
 FORECAST_ENGINE_OVERRIDE  >  merchants.forecast_engine  >  FORECAST_ENGINE_DEFAULT  >  shadow
-   (kill switch)              (per-merchant flag)           (default: shadow)
+   (kill switch)              (per-merchant flag)           (default: ensemble)
 ```
 
 | Variable | Default | Description |
 |---|---|---|
-| `FORECAST_ENGINE_DEFAULT` | `shadow` | Engine for merchants without a stored flag |
+| `FORECAST_ENGINE_DEFAULT` | `ensemble` | Engine for merchants without a stored flag |
 | `FORECAST_ENGINE_OVERRIDE` | — | Global kill switch: forces every run (`exponential` = demote everyone) |
 | `FORECAST_ENGINE_ROLLOUT_PERCENT` | `100` | Auto-promotion cohort: `merchant_id % 100 < percent` |
 | `FORECAST_CIRCUIT_BREAKER_THRESHOLD` | `0.05` | Run-level ensemble failure/timeout rate that reruns the run on exponential |
 
-Existing tenants are parked on `shadow` by migration `016`; the daily
-promotion job flips them to `ensemble` only after the safety gates pass.
-Operators can inspect/override per tenant via
+Migration `018` made `ensemble` the column/server default and promoted the
+parked `shadow` rows; `shadow` remains the measurement mode for tenants an
+operator parks there (POST `shadow`), and the daily promotion job flips those
+back to `ensemble` only after the safety gates pass. Operators can
+inspect/override per tenant via
 `GET/POST /api/v1/forecast-engine`. Full procedures:
 [FORECAST-ENGINE-RUNBOOK.md](FORECAST-ENGINE-RUNBOOK.md).
 
@@ -115,11 +117,13 @@ pip install -r requirements-forecast.txt
 | `forecast_promotion_status{merchant,engine}` | 1 for each tenant's current engine |
 | `forecast_duration_seconds{model}` | Per-run latency (12s node timeout, 10s cache TTL) |
 
-## Rollout procedure (merchant-level, shadow-first)
+## Rollout & demotion procedure (merchant-level)
 
-1. **All merchants** start on `shadow` (column default + migration `016`) —
-   both engines persist every run, exponential is served, and the safety
-   gates decide promotion.
+1. **New tenants** resolve to `ensemble` by default (column/server default +
+   `FORECAST_ENGINE_DEFAULT` after migration `018`, which also promoted the
+   tenants parked by `016`). To A/B a tenant, park it on `shadow` — both
+   engines persist every run, exponential is served, and the safety gates
+   decide promotion back.
 2. Run the backtest against real history: `py -3.12 scripts/forecast_backtest.py`
    (see [FORECAST-ACCURACY.md](FORECAST-ACCURACY.md)).
 3. The daily `daily_forecast_promotions` job promotes each shadow tenant

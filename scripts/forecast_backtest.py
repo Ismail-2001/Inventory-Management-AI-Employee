@@ -8,7 +8,13 @@ reports pooled, per-velocity-tier, and per-SKU accuracy:
     py -3.12 scripts/forecast_backtest.py --holdout 14 --folds 3 --min-history 90
     py -3.12 scripts/forecast_backtest.py --json backtest-report.json
 
-Velocity tiers (computed from each fold's training window):
+Scoring is calendar-aligned: the actual series for the hold-out horizon is
+0-filled across every calendar day after the last training day, so
+prediction day i always compares against demand on the same calendar day
+(horizon = last test date - last train date, not the number of stored sale
+rows). SKUs whose rows omit zero-sale days are therefore scored honestly.
+
+Velocity tiers (computed from each fold's raw training rows):
 
     intermittent  mean < 1.5 units/day OR >= 30% zero-demand days
     high          mean >= 10 units/day
@@ -31,7 +37,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from agent.db import async_session_factory
-from agent.forecast import bias_pct, build_ensemble, legacy_predict_daily, wmape
+from agent.forecast import bias_pct, build_ensemble, legacy_predict_daily, prepare_series, wmape
 from agent.models import SalesHistory
 
 TIER_ORDER = ("high", "medium", "intermittent")
@@ -149,6 +155,19 @@ def _tier_stats(rows: list[SkuBacktest]) -> TierStats:
     )
 
 
+def aligned_actual(train_rows: list[tuple[date, float]], test_rows: list[tuple[date, float]]) -> list[float]:
+    """0-filled actual demand for every calendar day after the last train day.
+
+    The horizon runs from the day after the last training day through the
+    last test row, so prediction day i always compares against demand on
+    the same calendar day (stored rows may skip zero-sale days; the horizon
+    therefore equals the calendar span, not ``len(test_rows)``).
+    """
+    dates, values = prepare_series([*train_rows, *test_rows])
+    cutoff = (train_rows[-1][0] - dates[0]).days + 1
+    return values[cutoff:]
+
+
 async def run_backtest(holdout: int, min_history: int, limit: int, folds: int = 1) -> Report:
     history = await load_history(min_history, limit)
     tested: list[SkuBacktest] = []
@@ -166,19 +185,20 @@ async def run_backtest(holdout: int, min_history: int, limit: int, folds: int = 
             train_rows, test_rows = rows[:start], rows[start:end]
 
             train = [v for _, v in train_rows]
-            actual = [v for _, v in test_rows]
+            actual = aligned_actual(train_rows, test_rows)
+            horizon = len(actual)
 
             v1_point = legacy_predict_daily(train)
-            v1_pred = [v1_point] * holdout
+            v1_pred = [v1_point] * horizon
 
-            bundle = build_ensemble(train_rows, horizon=holdout)
-            v2_pred = bundle.predictions[:holdout]
+            bundle = build_ensemble(train_rows, horizon=horizon)
+            v2_pred = bundle.predictions[:horizon]
 
             total_actual = sum(actual)
             coverage = None
             if bundle.p10 and bundle.p90:
-                hits = sum(1 for i in range(holdout) if bundle.p10[i] <= actual[i] <= bundle.p90[i])
-                coverage = hits / holdout
+                hits = sum(1 for i in range(horizon) if bundle.p10[i] <= actual[i] <= bundle.p90[i])
+                coverage = hits / horizon
 
             tested.append(
                 SkuBacktest(
@@ -190,8 +210,8 @@ async def run_backtest(holdout: int, min_history: int, limit: int, folds: int = 
                     v2_wmape=wmape(v2_pred, actual),
                     v1_bias=bias_pct(v1_pred, actual),
                     v2_bias=bias_pct(v2_pred, actual),
-                    v1_mase=_mase(train, [v1_pred[i] - actual[i] for i in range(holdout)]),
-                    v2_mase=_mase(train, [v2_pred[i] - actual[i] for i in range(holdout)]),
+                    v1_mase=_mase(train, [v1_pred[i] - actual[i] for i in range(horizon)]),
+                    v2_mase=_mase(train, [v2_pred[i] - actual[i] for i in range(horizon)]),
                     coverage=coverage,
                     model=bundle.model,
                     blended=bundle.meta.get("blended", False),
