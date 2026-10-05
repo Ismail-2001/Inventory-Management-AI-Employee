@@ -153,6 +153,15 @@ flowchart LR
 - **Metrics API**: acceptance rates, forecast error summary, stockout rates
 - **Recharts-powered dashboard** for visual analytics (included frontend)
 
+### ROI & Performance Dashboard
+
+- **Default landing page** (`/`) with date-range filters (7d / 30d / 90d / custom) over one aggregated payload
+- **Value & efficiency**: value generated (stockouts protected + capital freed), LLM cost, ROI multiple, hours saved
+- **Operational impact**: stockouts avoided, excess avoided, PO acceptance, time-to-decision, ensemble-vs-baseline forecast accuracy with trend
+- **Health**: at-risk SKUs, forecast coverage + confidence-interval distribution, engine fallback rate
+- **Every number is explainable**: per-metric info popovers plus an on-page "How we calculate these numbers" panel
+- **API**: `GET /api/v1/roi?days=…` (or `?start=&end=`) — see [`docs/ROI-DASHBOARD.md`](docs/ROI-DASHBOARD.md)
+
 ### Enterprise: SSO Authentication
 
 - **OpenID Connect** support (Google Workspace, Azure AD, Okta, Auth0)
@@ -211,7 +220,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — 8-check PR gate → Trivy scan → GHCR push → staging/prod deploy |
-| **Testing** | 232 tests — backend unit/integration/eval/contracts (162) + frontend Vitest (53) + Playwright E2E (17) |
+| **Testing** | 350+ tests — backend unit/integration/eval/contracts + frontend Vitest (64) + Playwright E2E (18) |
 
 ---
 
@@ -243,6 +252,13 @@ flowchart LR
 | `GET` | `/api/v1/chat/conversations` | API Key | Recent conversations (id, preview, counts) |
 | `POST` | `/api/v1/chat/actions/{id}/confirm` | API Key | Confirm a pending action → creates `pending_approval` PO |
 | `POST` | `/api/v1/chat/actions/{id}/cancel` | API Key | Cancel a pending action |
+
+### ROI Dashboard
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/roi?days=30` | API Key | ROI & performance report for the last N days (1–365) |
+| `GET` | `/api/v1/roi?start=&end=` | API Key | Same report for an inclusive custom range (≤ 366 days) |
 
 ### SSO Authentication
 
@@ -450,6 +466,15 @@ See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ACCURA
 
 See [`docs/CHAT-AGENT.md`](docs/CHAT-AGENT.md).
 
+### ROI Dashboard
+
+| Variable | Default | Description |
+|---|---|---|
+| `ROI_REVENUE_MULTIPLIER` | `2.0` | Revenue markup applied to stockout-protected units |
+| `ROI_MANUAL_PO_MINUTES` | `12` | Manual minutes replaced by each decided PO (hours-saved basis) |
+
+See [`docs/ROI-DASHBOARD.md`](docs/ROI-DASHBOARD.md).
+
 ### Monitoring & Alerting
 
 | Variable | Default | Description |
@@ -548,7 +573,7 @@ A React 19 dashboard ships with the agent. It provides operational visibility in
 
 | Page | Purpose |
 |---|---|
-| **Dashboard** | Overview cards (total SKUs, pending POs, alerts) + Run Sync button + forecast accuracy |
+| **Dashboard** | ROI landing page: value generated, LLM cost, ROI, hours saved, stockouts avoided, PO decisions, forecast accuracy, health panels — with date-range filters |
 | **Inventory** | Full SKU table with stock levels, lead times, and current status |
 | **Purchase Orders** | Pending approval queue with approve/reject UI and quantity override |
 | **Analytics** | Recharts-powered bar charts: PO acceptance rates + forecast error distribution |

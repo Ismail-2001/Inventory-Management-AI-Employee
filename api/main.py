@@ -364,6 +364,10 @@ from api.routes.forecast_engine import router as forecast_engine_router
 
 app.include_router(forecast_engine_router)
 
+from api.routes.roi import router as roi_router
+
+app.include_router(roi_router)
+
 from shared.metrics import setup_metrics
 
 setup_metrics(app)

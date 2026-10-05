@@ -91,6 +91,73 @@ export interface MetricsResponse {
   } | null
 }
 
+export interface RoiResponse {
+  period: { start: string; end: string; days: number }
+  operational: {
+    stockouts_avoided: { events: number; units: number; revenue_protected_usd: number }
+    excess_reduction: { units: number; capital_freed_usd: number; trimmed_pos: number; rejected_pos: number }
+    forecast_accuracy: {
+      ensemble_wmape_pct: number | null
+      ensemble_bias_pct: number | null
+      ensemble_count: number
+      baseline_wmape_pct: number | null
+      baseline_bias_pct: number | null
+      baseline_count: number
+      wmape_improvement_pct: number | null
+      outcome_mape_pct: number | null
+      outcome_count: number
+      series: { date: string; ensemble_wmape_pct: number | null; baseline_wmape_pct: number | null }[]
+    }
+    po_decisions: {
+      decided: number
+      accepted: number
+      rejected: number
+      accepted_as_is: number
+      edited_then_approved: number
+      acceptance_rate_pct: number
+      avg_hours_to_decision: number | null
+      decisions_with_timestamp: number
+      excess_reduction: { units: number; capital_freed_usd: number; trimmed_pos: number; rejected_pos: number }
+    }
+  }
+  efficiency: {
+    hours_saved: number
+    hours_saved_basis: { decided_pos: number; minutes_per_po: number }
+    llm: {
+      cost_usd: number
+      pipeline_cost_usd: number
+      chat_cost_usd: number
+      calls: number
+      tokens_in: number
+      tokens_out: number
+      cost_per_decision_usd: number | null
+    }
+    value_generated_usd: number
+    roi_multiple: number | null
+    assumptions: { revenue_multiplier: number; minutes_per_po: number }
+  }
+  health: {
+    at_risk: {
+      total: number
+      critical: number
+      warning: number
+      skus: { sku_id: number; sku_code: string; risk_level: string; reason: string }[]
+    }
+    forecast_confidence: {
+      total_forecasts: number
+      with_intervals: number
+      coverage_pct: number
+      distribution: { bucket: string; count: number }[]
+    }
+    engine: {
+      total_forecasts: number
+      fallbacks: number
+      fallback_rate_pct: number
+      distribution: { model: string; count: number }[]
+    }
+  }
+}
+
 export interface ChatAction {
   id: string
   tool: string
@@ -200,6 +267,16 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   runSync: () => request<RunSyncResponse>('/run-sync', { method: 'POST' }),
   getMetrics: (days = 30) => request<MetricsResponse>(`/metrics?days=${days}`),
+  getRoi: (range: { days?: number; start?: string; end?: string } = {}) => {
+    const params = new URLSearchParams()
+    if (range.start && range.end) {
+      params.set('start', range.start)
+      params.set('end', range.end)
+    } else {
+      params.set('days', String(range.days ?? 30))
+    }
+    return request<RoiResponse>(`/roi?${params.toString()}`)
+  },
   triggerOutcomeEval: () => request<{ status: string; evaluated: number }>('/evaluate-outcomes', { method: 'POST' }),
   triggerWeekly: () => request<{ status: string; insights_count: number }>('/run-weekly', { method: 'POST' }),
   getSkus: () => request<SkuSummary[]>('/skus'),
