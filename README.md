@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 7+" />
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/tests-232%20passing-22c55e?style=flat-square" alt="232 Tests" />
+  <img src="https://img.shields.io/badge/tests-351%20passing-22c55e?style=flat-square" alt="351 Tests" />
   <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License: MIT" />
   <a href="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml"><img src="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
 </p>
