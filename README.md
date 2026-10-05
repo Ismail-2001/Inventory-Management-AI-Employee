@@ -136,6 +136,15 @@ flowchart LR
 - **Idempotency-key support** for safe retries on approval/rejection
 - **Signed action tokens** enable secure approval links without exposing API keys
 
+### Chat Assistant (Natural Language)
+
+- **Streaming chat API**: `POST /api/v1/chat` runs a LangGraph tool-calling loop over live data and streams answers as Server-Sent Events (`start`, `delta`, `tool`, `message`, `error`)
+- **Six read-only tools**: inventory status, SKU details, supplier lookup, demand forecast, reorder quantity, forecast accuracy
+- **Proposed actions, human confirm**: `draft_purchase_order` never executes — it surfaces a pending action you confirm or cancel, creating a `pending_approval` PO
+- **Conversation history**: persisted per merchant, replayable via `GET /api/v1/chat/history`
+- **Chat UI**: `/chat` page with live tool chips, amber confirm/cancel action cards, and a conversation switcher
+- Full guide: [`docs/CHAT-AGENT.md`](docs/CHAT-AGENT.md)
+
 ### Reporting & Analytics
 
 - **Weekly AI reflection**: strategic insights on forecast accuracy and PO acceptance rates
@@ -224,6 +233,16 @@ flowchart LR
 | `POST` | `/api/v1/po/{id}/approve` | API Key + role | 5/min | Approve with optional `?quantity=` override |
 | `POST` | `/api/v1/po/{id}/reject` | API Key + role | 5/min | Reject with optional reason |
 | `GET` | `/api/v1/po/action` | Signed token | — | One-click approve/reject from Slack links |
+
+### Chat
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/chat` | API Key | Stream one conversational turn (SSE: `start`, `delta`, `tool`, `message`, `error`) |
+| `GET` | `/api/v1/chat/history?conversation_id=` | API Key | Replay stored messages for a conversation |
+| `GET` | `/api/v1/chat/conversations` | API Key | Recent conversations (id, preview, counts) |
+| `POST` | `/api/v1/chat/actions/{id}/confirm` | API Key | Confirm a pending action → creates `pending_approval` PO |
+| `POST` | `/api/v1/chat/actions/{id}/cancel` | API Key | Cancel a pending action |
 
 ### SSO Authentication
 
@@ -420,6 +439,17 @@ curl -X POST http://localhost:8002/api/v1/run-sync \
 
 See [`docs/FORECAST-TUNING.md`](docs/FORECAST-TUNING.md), [`docs/FORECAST-ACCURACY.md`](docs/FORECAST-ACCURACY.md), and [`docs/FORECAST-ENGINE-RUNBOOK.md`](docs/FORECAST-ENGINE-RUNBOOK.md).
 
+### Chat Agent
+
+| Variable | Default | Description |
+|---|---|---|
+| `CHAT_MAX_STEPS` | `6` | Max LangGraph tool-calling iterations per chat turn |
+| `CHAT_MAX_INPUT_CHARS` | `4000` | Reject user messages longer than this |
+| `CHAT_HISTORY_MESSAGES` | `20` | Prior messages replayed to the LLM as context |
+| `CHAT_ACTION_TTL_MINUTES` | `15` | Lifetime of proposed (pending) chat actions |
+
+See [`docs/CHAT-AGENT.md`](docs/CHAT-AGENT.md).
+
 ### Monitoring & Alerting
 
 | Variable | Default | Description |
@@ -538,8 +568,8 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Backend — full test suite (162 tests)
-pytest tests/ -v
+# Backend — full test suite (255 unit tests, no Postgres required)
+pytest tests/ -v --ignore=tests/test_integration.py
 
 # Backend — unit tests only (no external dependencies)
 pytest tests/ -v --ignore=tests/test_integration.py
@@ -556,7 +586,7 @@ pytest tests/test_webhook_contracts.py -v
 # Backend — enterprise feature tests (SSO, audit, branding)
 pytest tests/test_enterprise.py -v
 
-# Frontend — unit tests (53 tests, Vitest + React Testing Library)
+# Frontend — unit tests (58 tests, Vitest + React Testing Library)
 cd inventory-frontend
 npm test
 
