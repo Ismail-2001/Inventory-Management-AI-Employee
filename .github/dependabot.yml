@@ -1,48 +1,52 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
+  - package-ecosystem: pip
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "python"
+    labels: [dependencies, area:backend]
     commit-message:
-      prefix: "deps"
+      prefix: deps
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
 
-  - package-ecosystem: "npm"
-    directory: "/inventory-frontend"
+  - package-ecosystem: npm
+    directory: /inventory-frontend
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "javascript"
+    labels: [dependencies, area:frontend]
     commit-message:
-      prefix: "deps"
+      prefix: deps
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "ci"
+    labels: [dependencies, area:ci]
     commit-message:
-      prefix: "ci"
+      prefix: ci
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
 
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: docker
+    directory: /
     schedule:
-      interval: "monthly"
+      interval: monthly
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "docker"
+    labels: [dependencies, area:infrastructure]
     commit-message:
-      prefix: "docker"
+      prefix: docker
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]

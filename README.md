@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 7+" />
   <img src="https://img.shields.io/badge/Shopify-7AB55C?style=flat-square&logo=shopify&logoColor=white" alt="Shopify" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/tests-232%20passing-22c55e?style=flat-square" alt="232 Tests" />
+  <img src="https://img.shields.io/badge/tests-408%20passing-22c55e?style=flat-square" alt="408 Tests" />
   <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License: MIT" />
   <a href="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml"><img src="https://github.com/Ismail-2001/Inventory-Management-AI-Employee/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
 </p>
@@ -220,7 +220,7 @@ flowchart LR
 | **Scheduling** | APScheduler — async background jobs |
 | **Infrastructure** | Docker, multi-stage builds, non-root user, health checks |
 | **CI/CD** | GitHub Actions — 8-check PR gate → Trivy scan → GHCR push → staging/prod deploy |
-| **Testing** | 350+ tests — backend unit/integration/eval/contracts + frontend Vitest (64) + Playwright E2E (18) |
+| **Testing** | 408 tests — backend unit/integration/eval/contracts (326) + frontend Vitest (64) + Playwright E2E (18) |
 
 ---
 
@@ -593,8 +593,8 @@ In production, the built frontend (`dist/`) is served directly by FastAPI's `Sta
 ## Testing
 
 ```bash
-# Backend — full test suite (255 unit tests, no Postgres required)
-pytest tests/ -v --ignore=tests/test_integration.py
+# Backend — full test suite (326 unit tests, no Postgres required)
+pytest tests/ -v --ignore=tests/test_integration.py --ignore=tests/eval_suite.py
 
 # Backend — unit tests only (no external dependencies)
 pytest tests/ -v --ignore=tests/test_integration.py

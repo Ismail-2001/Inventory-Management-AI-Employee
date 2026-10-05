@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose an improvement to the agent, API, dashboard, or docs
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / opportunity
+      description: What operator pain or business outcome does this address?
+      placeholder: Operators cannot see why the agent recommended a specific PO quantity…
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What should the product do? Include API/UI shape if you have one in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other approaches you evaluated.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I searched existing issues and this is not a duplicate
+        - label: I am willing to help implement this (optional)

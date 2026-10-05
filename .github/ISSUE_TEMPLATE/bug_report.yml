@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the agent, API, or dashboard is not behaving as expected
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more detail you give, the faster we can reproduce it.
+        For security vulnerabilities, do **not** open an issue — see the [security policy](https://github.com/Ismail-2001/Inventory-Management-AI-Employee/security/policy).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Clear description of the observed behavior.
+      placeholder: The pipeline drafted a PO with quantity 0 for a SKU that had stock…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, commands, or API calls that trigger the problem.
+      placeholder: |
+        1. `POST /api/v1/run-sync`
+        2. Open `/purchase-orders`
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Environment version and setup details.
+      placeholder: |
+        - Environment: production / staging / local docker
+        - Commit SHA:
+        - Browser (if UI): Chrome 141
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Relevant backend logs, stack traces, or API responses (redact secrets).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+        - label: I have redacted secrets and API keys from any pasted content

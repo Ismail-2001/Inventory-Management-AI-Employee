@@ -1,27 +1,23 @@
 ## Summary
 
-<!-- What does this PR do? One or two sentences. -->
+<!-- What changed, and why. Link related issues: Fixes #123 -->
 
-## Changes
+## Type of change
 
-- 
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactor / tech debt
+- [ ] Documentation
+- [ ] CI / tooling
 
-## Why
+## Test plan
 
-<!-- What problem does this solve? Reference an issue if one exists. -->
+<!-- CI runs the same gates. Tick what you ran locally. -->
 
-## Test Plan
-
-- [ ] `ruff check . --target-version py312`
-- [ ] `ruff format --check .`
-- [ ] `mypy .`
-- [ ] Backend tests (`pytest tests/`)
-- [ ] Frontend tests (`cd inventory-frontend && npm test`)
-- [ ] If API behavior changed: verified against the running app
-
-## Checklist
-
-- [ ] No secrets or keys added
-- [ ] Migration generated if models changed
-- [ ] README / docs updated if user-facing behavior changed
-- [ ] CHANGELOG.md entry added
+- [ ] Backend gates: `ruff check . --target-version py312`, `ruff format --check .`, `mypy agent api shared`
+- [ ] Backend tests: `pytest tests/ --ignore=tests/test_integration.py` (CI also runs integration + eval suites)
+- [ ] Frontend gates: `npm run build`, `npm run lint`, `npm run test`
+- [ ] New endpoints and settings are documented (README table + `docs/`)
+- [ ] `CHANGELOG.md` `[Unreleased]` entry added
+- [ ] Database migrations included (or PR states "no migration") — `alembic heads` stays a single head
+- [ ] No secrets, API keys, or `.env` files committed
