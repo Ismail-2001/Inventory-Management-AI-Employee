@@ -18,6 +18,7 @@ async def risk_node(state: State) -> State:
         level, reason = determine_risk_level(
             f.get("days_of_stock_remaining"),
             lead_time,
+            days_of_cover_p90=f.get("days_of_cover_p90"),
         )
 
         if level in ("critical", "warning"):

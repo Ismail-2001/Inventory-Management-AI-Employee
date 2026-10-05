@@ -1,4 +1,4 @@
-from agent.ordering import calculate_reorder_quantity
+from agent.ordering import calculate_reorder_quantity, planning_daily_demand
 
 
 def test_basic_reorder():
@@ -61,3 +61,21 @@ def test_partial_lead_time():
         moq=10,
     )
     assert qty == 0
+
+
+def test_planning_demand_defaults_to_point():
+    assert planning_daily_demand(10.0) == 10.0
+    assert planning_daily_demand(10.0, None) == 10.0
+
+
+def test_planning_demand_uses_higher_p90():
+    assert planning_daily_demand(10.0, 12.5) == 12.5
+
+
+def test_planning_demand_keeps_point_when_p90_lower():
+    assert planning_daily_demand(10.0, 8.0) == 10.0
+
+
+def test_planning_demand_ignores_non_positive_p90():
+    assert planning_daily_demand(10.0, 0) == 10.0
+    assert planning_daily_demand(10.0, -1.0) == 10.0

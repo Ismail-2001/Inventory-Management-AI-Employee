@@ -34,6 +34,8 @@ async def test_start_adds_jobs_when_enabled(monkeypatch):
     assert "retry_failed_webhooks" in added
     assert "cleanup_old_checkpoints" in added
     assert "export_audit_logs" in added
+    assert "daily_forecast_promotions" in added
+    assert "weekly_forecast_report" in added
 
 
 @pytest.mark.asyncio
@@ -76,3 +78,46 @@ async def test_export_audit_no_log_when_zero(monkeypatch):
 
     await scheduler_module.export_audit()
     audit_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_daily_forecast_promotions_runs_and_logs_promotions(monkeypatch):
+    from types import SimpleNamespace
+
+    auto_mock = AsyncMock(return_value=[SimpleNamespace(merchant_id=9, promoted=True)])
+    monkeypatch.setattr("agent.forecast_engine.auto_promote_merchants", auto_mock)
+    audit_mock = AsyncMock()
+    monkeypatch.setattr("agent.audit.log", audit_mock)
+
+    await scheduler_module.daily_forecast_promotions()
+
+    auto_mock.assert_awaited_once()
+    audit_mock.assert_awaited_once()
+    assert audit_mock.call_args.kwargs["action"] == "forecast_engine_auto_promotions"
+    assert audit_mock.call_args.kwargs["details"]["merchant_ids"] == [9]
+
+
+@pytest.mark.asyncio
+async def test_daily_forecast_promotions_no_log_when_nothing_promoted(monkeypatch):
+    monkeypatch.setattr(
+        "agent.forecast_engine.auto_promote_merchants",
+        AsyncMock(return_value=[]),
+    )
+    audit_mock = AsyncMock()
+    monkeypatch.setattr("agent.audit.log", audit_mock)
+
+    await scheduler_module.daily_forecast_promotions()
+    audit_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_weekly_forecast_report_calls_sender(monkeypatch):
+    from datetime import date, timedelta
+
+    sender_mock = AsyncMock(return_value={"merchants": []})
+    monkeypatch.setattr("agent.forecast_engine.send_weekly_engine_report", sender_mock)
+
+    await scheduler_module.weekly_forecast_report()
+
+    sender_mock.assert_awaited_once()
+    assert sender_mock.call_args.args[0] == date.today() - timedelta(days=7)
