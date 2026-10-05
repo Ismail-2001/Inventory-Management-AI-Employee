@@ -286,41 +286,39 @@ function RoiSections({ roi, syncResult }: { roi: RoiResponse; syncResult: RunSyn
               title="PO decisions"
               help="All POs created in the window that reached a decision. Accepted (as-is) means the operator approved the drafted quantity unchanged."
             >
-              {decisions.decided > 0 ? (
-                <div className="space-y-3">
-                  <p className="tabular text-3xl font-medium text-ink">{num(decisions.acceptance_rate_pct)}%</p>
-                  <div className="space-y-1.5 font-mono text-[12.5px] text-ink-muted">
-                    <p className="flex justify-between">
-                      <span>Accepted (as-is)</span>
-                      <span className="tabular text-ink">{decisions.accepted_as_is}</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>Edited then Approved</span>
-                      <span className="tabular text-ink">{decisions.edited_then_approved}</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>Rejected</span>
-                      <span className="tabular text-ink">{decisions.rejected}</span>
-                    </p>
-                    <p className="flex justify-between border-t border-border pt-1.5">
-                      <span>Avg time to decision</span>
-                      <span className="tabular text-ink">
-                        {decisions.avg_hours_to_decision === null ? '—' : `${num(decisions.avg_hours_to_decision)}h`}
-                      </span>
-                    </p>
-                  </div>
+              <div className="space-y-3">
+                <p className="tabular text-3xl font-medium text-ink">
+                  {decisions.decided > 0 ? `${num(decisions.acceptance_rate_pct)}%` : '—'}
+                </p>
+                <div className="space-y-1.5 font-mono text-[12.5px] text-ink-muted">
+                  <p className="flex justify-between">
+                    <span>Accepted (as-is)</span>
+                    <span className="tabular text-ink">{decisions.accepted_as_is}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span>Edited then Approved</span>
+                    <span className="tabular text-ink">{decisions.edited_then_approved}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span>Rejected</span>
+                    <span className="tabular text-ink">{decisions.rejected}</span>
+                  </p>
+                  <p className="flex justify-between border-t border-border pt-1.5">
+                    <span>Avg time to decision</span>
+                    <span className="tabular text-ink">
+                      {decisions.avg_hours_to_decision === null ? '—' : `${num(decisions.avg_hours_to_decision)}h`}
+                    </span>
+                  </p>
                 </div>
-              ) : (
-                <p className="text-[13px] text-ink-faint">No PO decisions yet</p>
-              )}
+                {decisions.decided === 0 && <p className="text-[13px] text-ink-faint">No PO decisions yet</p>}
+              </div>
             </Panel>
 
             <Panel
               title="Forecast Accuracy"
               help="Backtest wMAPE on each persisted forecast: the ensemble engine vs the legacy baseline engine, plus an independent error measure from evaluated PO outcomes."
             >
-              {hasAccuracyData ? (
-                <div className="space-y-3">
+              <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3 font-mono text-[12.5px] text-ink-muted">
                     <div className="rounded-md bg-surface-sunken p-2.5">
                       <p className="text-[11px] text-ink-faint">Ensemble wMAPE</p>
@@ -368,13 +366,14 @@ function RoiSections({ roi, syncResult }: { roi: RoiResponse; syncResult: RunSyn
                       </ResponsiveContainer>
                     </div>
                   )}
-                  <p className="font-mono text-[11px] text-ink-faint">
-                    Ensemble (solid) vs baseline (dashed) · {accuracy.ensemble_count} ensemble / {accuracy.baseline_count} baseline forecasts
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[13px] text-ink-faint">Not enough forecast data yet</p>
-              )}
+                  {hasAccuracyData ? (
+                    <p className="font-mono text-[11px] text-ink-faint">
+                      Ensemble (solid) vs baseline (dashed) · {accuracy.ensemble_count} ensemble / {accuracy.baseline_count} baseline forecasts
+                    </p>
+                  ) : (
+                    <p className="text-[13px] text-ink-faint">Not enough forecast data yet</p>
+                  )}
+              </div>
             </Panel>
           </div>
 
