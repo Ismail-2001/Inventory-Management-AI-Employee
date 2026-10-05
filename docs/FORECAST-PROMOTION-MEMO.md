@@ -138,7 +138,12 @@ place: `forecast_engine_used` (must stay `ensemble`), `forecast_fallback_count`
 `build_weekly_engine_report`), `forecast_error_pct` (accuracy trend on the
 ROI dashboard). Any fallback spike or MAPE ratio > 0.85 → set
 `FORECAST_ENGINE_OVERRIDE=exponential` (documented in the runbook) and
-investigate before removing it.
+investigate before removing it. The running evidence record for the
+**observation window 6–20 Oct 2026** — cadence, signals, pre-registered
+decision rules, and dated status entries — lives in
+[POST-FLIP-OBSERVATION.md](POST-FLIP-OBSERVATION.md); Day-7 and Day-14
+notes are cross-posted to issue #51, and online results are folded back
+into this memo when the window closes.
 
 ## Consumer verification
 
