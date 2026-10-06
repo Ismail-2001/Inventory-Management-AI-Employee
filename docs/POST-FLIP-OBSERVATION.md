@@ -45,6 +45,28 @@ When the API stack is down, the DB signals above are authoritative.
    [FORECAST-PROMOTION-MEMO.md](FORECAST-PROMOTION-MEMO.md) with online
    results, and set issue #51 to its final status per item.
 
+## Check schedule (≤48 h gaps — this log is the single source of truth)
+
+Every row is a planned touch: routine checks append a dated line below;
+Day-7 and Day-14 also mirror a status note into issue #51. Issue comments
+and the memo *reference* this log — they never carry evidence that is not
+recorded here first.
+
+| # | Planned | Type | Status |
+|---|---|---|---|
+| 1 | 6 Oct | Baseline + cadence confirmation | done (2 entries) |
+| 2 | 8 Oct | Routine CHECKS | pending |
+| 3 | 10 Oct | Routine CHECKS | pending |
+| 4 | 12 Oct | Routine CHECKS | pending |
+| 5 | 13 Oct | Routine CHECKS + **Day-7 note** (issue #51) | pending |
+| 6 | 14 Oct | Routine CHECKS | pending |
+| 7 | 16 Oct | Routine CHECKS | pending |
+| 8 | 18 Oct | Routine CHECKS | pending |
+| 9 | 20 Oct | Final CHECKS + **Day-14 note** (issue #51) | pending |
+
+Mark rows done as checks are executed; gaps > 48 h must be explained in
+the corresponding log entry.
+
 ## Decision rules (pre-registered — evidence, not vibes)
 
 - **Critical → kill switch:** any `ForecastCircuitBreakerTripped` or
