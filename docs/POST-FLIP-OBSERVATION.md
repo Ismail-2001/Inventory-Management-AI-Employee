@@ -100,6 +100,51 @@ gh api "repos/Ismail-2001/Inventory-Management-AI-Employee/actions/runs?branch=m
 - [ ] Promotion memo updated with online results
 - [ ] Decision: "promotion confirmed" or "specific small follow-up required"
 
+## Status note structures
+
+### Day-7 note (~13 Oct) — post to issue #51, mirror in the log
+
+> **Post-flip observation — Day 7 status (13 Oct 2026)**
+>
+> - **Cadence:** checks run on \<dates\> (≤48 h gaps: yes/no); log: this file
+> - **Stability:** default still `ensemble`; merchants on `ensemble`: n/1;
+>   no config/code drift; CI on `main` green for every push
+> - **Fallback frequency:** rows since window start: n; `fallback_used`: n
+>   (share); timeouts / circuit trips: n
+> - **Accuracy signals:** row-level wMAPE/bias vs Day-1 baseline;
+>   `po_outcomes` n + mean `forecast_error_pct` (or "no samples yet");
+>   forecast alerts fired: none / \<list + triage\>
+> - **Anomalies:** none / \<describe, root cause, whether a critical trigger
+>   fired\>
+> - **Merchant opt-outs:** none / \<list with audit-log refs\>
+> - **Interim verdict:** stable / concern (+ follow-up)
+> - **Rule status:** coverage rule — evidence so far; auto-demotion rule —
+>   evidence so far; intermittent — re-scope confirmed
+
+### Day-14 note (~20 Oct) — post to issue #51, mirror in the log
+
+> **Post-flip observation — Day 14 status + verdict (20 Oct 2026)**
+>
+> - **Cadence:** checks run: n, gaps: none / \<reason\>
+> - **Full-window behavior:** stability, fallback frequency (window totals),
+>   anomalies, opt-outs
+> - **Decision rules applied:**
+>   - [ ] Critical triggers fired? (fallback > 5%/24 h, breaker, storm alert)
+>         → if no: record "no code changes were warranted this window"
+>   - [ ] **Medium coverage 0.51:** observed harm (alerts, risk/PO issues,
+>         outcomes worse than baseline)? pooled coverage in 0.75–0.90?
+>         → **ACCEPT** (record why) or **SOFT-FOLLOWUP** (open non-blocking
+>         interval-calibration issue)
+>   - [ ] **Auto-demotion:** sustained `forecast_mape_ratio > 0.85` across
+>         ≥ 2 checks with live data? → **IMPLEMENT** (re-scope as follow-up)
+>         or **CLOSE as "not required at this time"**
+>   - [ ] **Intermittent:** → **RE-SCOPE** on #51: "requires real
+>         sparse/production data — cannot be validated on demo seed"
+> - **Memo updated** with online results (PR link)
+> - **Verdict:** `promotion confirmed` **or** `specific small follow-up
+>   required (list)` — exactly one, explicit
+> - **Pilot readiness:** outstanding forecast blockers: none / list
+
 ---
 
 ## Status log
@@ -144,3 +189,24 @@ Both velocity gates observed live: trend models excluded below 10 u/d
 
 **Verdict:** stable configuration, code path exercised, safety controls
 verified. Nothing to fix. Next check by **8 Oct**; Day-7 note **~13 Oct**.
+
+### Cadence check — 6 Oct 2026 (confirmation)
+
+CHECKS re-run the same day to confirm the protocol executes end-to-end and
+nothing drifted after the Day-1 entry:
+
+- **All values identical to the Day-1 baseline:** `alembic 018`;
+  merchant on `ensemble`; `forecasts` 3 rows, all `ensemble_v2`,
+  **0 fallbacks**, no new rows since the smoke (`MAX(created_at)` = Day-1
+  smoke); row-level avg wMAPE 0.50 / bias −0.17; `po_outcomes` 0;
+  `audit_log` 0 forecast events.
+- **No drift:** `FORECAST_ENGINE_DEFAULT` still defaults to `ensemble`,
+  `FORECAST_ENGINE_OVERRIDE` unset, `TREND_MIN_DAILY = 10.0` untouched,
+  local `main` == `origin/main` (65b641f), 0 open PRs.
+- **Pipeline health:** post-merge CI for PR #55 finished **all 7 checks
+  success** (runner slowness cleared; docker-build + Trivy completed);
+  Deploy-to-Production success.
+- **Anomalies:** none. Opt-outs: none.
+
+Day-7 and Day-14 note structures are pre-drafted in *Status note
+structures* above — next check by **8 Oct**.
