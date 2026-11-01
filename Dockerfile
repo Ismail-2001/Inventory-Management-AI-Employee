@@ -5,7 +5,7 @@ RUN npm ci
 COPY inventory-frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 WORKDIR /app
 
 RUN apt-get update \
